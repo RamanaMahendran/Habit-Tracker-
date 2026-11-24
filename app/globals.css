@@ -951,3 +951,59 @@ footer .updatebtn {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+.journalaccess p {
+  margin: 14px 0;
+  font-size: 0.95rem;
+}
+.journalaccess details {
+  border-top: 1px solid var(--line);
+  padding: 14px 0;
+}
+.journalaccess details:first-of-type {
+  margin-top: 16px;
+}
+.journalaccess summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+.journalaccess label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  font-size: 0.88rem;
+}
+.journalaccess .confirmkey {
+  display: flex;
+  align-items: center;
+}
+.journalaccess a {
+  color: var(--forest);
+}
+.recoveryactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.recoverycode {
+  padding: 12px;
+  margin-top: 10px;
+  background: var(--page);
+  border-radius: 8px;
+}
+.recoverycode code {
+  display: block;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.recoverycode small {
+  color: var(--muted);
+}
+.priorjournal {
+  margin: 12px 0;
+}
+.priorjournal button {
+  display: inline-block;
+}
+footer {
+  flex-wrap: wrap;
+}

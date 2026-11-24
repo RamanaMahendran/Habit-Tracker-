@@ -56,6 +56,9 @@ import {
 import release from "../public/version.json";
 import { workbook, saveFile, calendar } from "@/lib/downloads";
 
+import { JournalAccess } from "@/components/journal-access";
+import { journalFetch, onJournalSwitch } from "@/lib/journal-key";
+
 const tabs = [
   { name: "Planner", icon: CalendarDays },
   { name: "Check-in chat", icon: MessageCircle },
@@ -93,6 +96,7 @@ function useJournal() {
     [error, setError] = useState(""),
     [state, setState] = useState("Connecting"),
     [busy, setBusy] = useState(false);
+  const [legacyAvailable, setLegacyAvailable] = useState(false);
   const cursor = useRef(0),
     queue = useRef(Promise.resolve()),
     lock = useRef(false);
@@ -100,16 +104,21 @@ function useJournal() {
     const run = async () => {
       let more = true;
       while (more) {
-        const r = await fetch("/api/journal?after=" + cursor.current, {
+        const r = await journalFetch("/api/journal?after=" + cursor.current, {
           cache: "no-store",
         });
         if (!r.ok)
           throw Error(
             r.status === 401
-              ? "Sign in to load your habits."
+              ? "Reload the page to reconnect your journal."
               : "Cloud data is unavailable. Try again.",
           );
-        const json = (await r.json()) as { events: Entry[]; more: boolean };
+        const json = (await r.json()) as {
+          events: Entry[];
+          more: boolean;
+          legacyAvailable: boolean;
+        };
+        if (!cursor.current) setLegacyAvailable(json.legacyAvailable);
         if (json.events.length) {
           cursor.current = json.events.at(-1)!.seq;
           setEvents((old) => [...old, ...json.events]);
@@ -143,7 +152,7 @@ function useJournal() {
     lock.current = true;
     setBusy(true);
     try {
-      const r = await fetch("/api/journal", {
+      const r = await journalFetch("/api/journal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ events: changes }),
@@ -162,7 +171,29 @@ function useJournal() {
       setBusy(false);
     }
   }
-  return { events, refresh, save, error, state, busy };
+  async function importPrevious() {
+    const r = await journalFetch("/api/journal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "import-previous" }),
+    });
+    if (!r.ok)
+      throw Error(
+        "Could not import your previous journal. Verify the original account and try again.",
+      );
+    await refresh();
+    setLegacyAvailable(false);
+  }
+  return {
+    events,
+    refresh,
+    save,
+    error,
+    state,
+    busy,
+    legacyAvailable,
+    importPrevious,
+  };
 }
 function MicButton({
   onText,
@@ -306,7 +337,23 @@ function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
   );
 }
 export default function App() {
-  const { events, refresh, save, error, state, busy } = useJournal();
+  const {
+    events,
+    refresh,
+    save,
+    error,
+    state,
+    busy,
+    legacyAvailable,
+    importPrevious,
+  } = useJournal();
+  const [access, setAccess] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("previous") === "1")
+      setAccess(true);
+    window.addEventListener("storage", onJournalSwitch);
+    return () => window.removeEventListener("storage", onJournalSwitch);
+  }, []);
   const journal = useMemo(() => indexJournal(events), [events]);
   const [tab, setTab] = useState("Planner"),
     [day, setDay] = useState(indiaDay),
@@ -1119,6 +1166,14 @@ export default function App() {
             </section>
           </>
         )}
+        {legacyAvailable && (
+          <p className="priorjournal">
+            Habits from your previous journal are available.{" "}
+            <button className="linkbtn" onClick={() => setAccess(true)}>
+              Import habits
+            </button>
+          </p>
+        )}
         <footer>
           <span>
             <CloudCheck size={15} />
@@ -1133,9 +1188,21 @@ export default function App() {
           >
             {available ? "Update available" : "App updates"}
           </button>
+          <button className="updatebtn" onClick={() => setAccess(true)}>
+            Journal access
+          </button>
           <span>India Standard Time · GMT+5:30</span>
         </footer>
       </main>
+      {access && (
+        <Modal title="Journal access" close={() => setAccess(false)}>
+          <JournalAccess
+            hasHabits={events.length > 0}
+            legacyAvailable={legacyAvailable}
+            onImport={importPrevious}
+          />
+        </Modal>
+      )}
       {updates && (
         <Modal title="App updates" close={() => setUpdates(false)}>
           <p className="update-info">Habit Grove {release.version}</p>

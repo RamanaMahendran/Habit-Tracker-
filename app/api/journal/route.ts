@@ -12,11 +12,23 @@ const reply = (x: unknown, status = 200) =>
     status,
     headers: { "Cache-Control": "private, no-store" },
   });
-function owner(req: Request) {
-  return (
-    req.headers.get("oai-authenticated-user-id") ||
-    (import.meta.env.DEV ? "local-preview" : "")
+async function owner(req: Request) {
+  const key = req.headers.get("x-habit-journal-key");
+  if (!key || !/^[a-f0-9]{64}$/.test(key)) return null;
+  const hash = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(key),
   );
+  return (
+    "journal:" +
+    Array.from(new Uint8Array(hash), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("")
+  );
+}
+// The platform identity is used only to copy records from the original release.
+function previousOwner(req: Request) {
+  return req.headers.get("oai-authenticated-user-id");
 }
 const uuid = (x: unknown) =>
   typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x);
@@ -26,11 +38,24 @@ const date = (x: unknown) =>
   !isNaN(Date.parse(x)) &&
   new Date(x).toISOString().slice(0, 10) === x;
 export async function GET(req: Request) {
-  const user = owner(req);
-  if (!user) return reply({ error: "Sign in to view your planner." }, 401);
+  const user = await owner(req);
+  if (!user)
+    return reply({ error: "Reload Habit Grove to open your journal." }, 401);
   const after = Number(new URL(req.url).searchParams.get("after") || 0);
   if (!Number.isSafeInteger(after) || after < 0)
     return reply({ error: "Invalid cursor." }, 400);
+  const legacy = previousOwner(req);
+  const legacyAvailable =
+    !after && legacy
+      ? Boolean(
+          await env
+            .DB!.prepare(
+              "SELECT 1 FROM habit_journal old WHERE old.owner=? AND NOT EXISTS (SELECT 1 FROM habit_journal dest WHERE dest.owner=? AND dest.uid=old.uid) LIMIT 1",
+            )
+            .bind(legacy, user)
+            .first(),
+        )
+      : false;
   const result = await env
     .DB!.prepare(
       "SELECT seq,habit,kind,day,payload,created FROM habit_journal WHERE owner=? AND seq>? ORDER BY seq LIMIT 500",
@@ -43,11 +68,13 @@ export async function GET(req: Request) {
       payload: JSON.parse(String(r.payload)),
     })),
     more: result.results.length === 500,
+    legacyAvailable,
   });
 }
 export async function POST(req: Request) {
-  const user = owner(req);
-  if (!user) return reply({ error: "Sign in to save." }, 401);
+  const user = await owner(req);
+  if (!user)
+    return reply({ error: "Reload Habit Grove to save your changes." }, 401);
   if (
     req.headers.get("origin") !== new URL(req.url).origin ||
     !req.headers.get("content-type")?.includes("application/json")
@@ -55,7 +82,26 @@ export async function POST(req: Request) {
     return reply({ error: "Invalid request." }, 403);
   const body = (await req.json().catch(() => null)) as {
     events?: unknown;
+    action?: unknown;
   } | null;
+  if (body?.action === "import-previous") {
+    const legacy = previousOwner(req);
+    if (!legacy)
+      return reply(
+        {
+          error:
+            "Open the previous journal with its original account to import it.",
+        },
+        401,
+      );
+    const result = await env
+      .DB!.prepare(
+        "INSERT INTO habit_journal(owner,uid,habit,kind,day,payload,created) SELECT ?,uid,habit,kind,day,payload,created FROM habit_journal WHERE owner=? ORDER BY seq ON CONFLICT(owner,uid) DO NOTHING",
+      )
+      .bind(user, legacy)
+      .run();
+    return reply({ imported: result.meta.changes });
+  }
   const batch = body?.events;
   if (!Array.isArray(batch) || batch.length < 1 || batch.length > 8)
     return reply({ error: "Invalid change." }, 400);
