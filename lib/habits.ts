@@ -1,3 +1,4 @@
+import { slotTimes, parseInterval, type InDay } from "./interval";
 export const categories = [
   "Wellness",
   "Learning",
@@ -14,16 +15,17 @@ export type Habit = {
   time: string;
   repeat: string;
   archived?: boolean;
+  inDay?: InDay;
 };
 export type Entry = {
   seq: number;
   habit: string;
   kind: "plan" | "status";
   day: string;
-  payload: Habit | { status: string; note: string };
+  payload: Habit | { status: string; note: string; slot?: string };
   created: string;
 };
-export type Row = Habit & { status: string; day: string };
+export type Row = Habit & { status: string; day: string; slot: string };
 export const indiaDay = (now = new Date()) =>
   new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata" }).format(now);
 export const indiaTime = (now = new Date()) =>
@@ -66,7 +68,10 @@ export function indexJournal(entries: Entry[]) {
     if (e.kind === "plan") {
       if (!plans.has(e.habit)) plans.set(e.habit, []);
       plans.get(e.habit)!.push(e);
-    } else marks.set(e.habit + e.day, (e.payload as { status: string }).status);
+    } else {
+      const mark = e.payload as { status: string; slot?: string };
+      marks.set(e.habit + e.day + (mark.slot || ""), mark.status);
+    }
   }
   const rows = (day: string): Row[] =>
     Array.from(plans.values())
@@ -75,7 +80,16 @@ export function indexJournal(entries: Entry[]) {
         if (!event) return [];
         const h = event.payload as Habit;
         return scheduled(h, day)
-          ? [{ ...h, day, status: marks.get(h.id + day) || "Pending" }]
+          ? slotTimes(h.time, h.inDay).map((time, i) => {
+              const slot = i === 0 ? "" : time;
+              return {
+                ...h,
+                time,
+                day,
+                slot,
+                status: marks.get(h.id + day + slot) || "Pending",
+              };
+            })
           : [];
       })
       .sort(
@@ -131,6 +145,8 @@ export function draftPlan(input: string, day = indiaDay()): Habit[] {
     .filter(Boolean)
     .slice(0, 8);
   return pieces.flatMap((part) => {
+    const within = parseInterval(part);
+    if (within) part = within.rest;
     const lower = part.toLowerCase(),
       weekday = days.findIndex((x) => lower.includes(x));
     let start = lower.includes("tomorrow") ? moveDay(day, 1) : day;
@@ -192,14 +208,13 @@ export function draftPlan(input: string, day = indiaDay()): Habit[] {
           : /^(?:read more|build a reading habit)$/i.test(title)
             ? ["Read 10 pages"]
             : [title];
-    return suggestions
-      .filter(Boolean)
-      .map((s, i) => ({
-        ...blank(start),
-        title: (s[0].toUpperCase() + s.slice(1)).slice(0, 160),
-        repeat,
-        time: i && time ? "" : time,
-        category: categoryFor(s),
-      }));
+    return suggestions.filter(Boolean).map((s, i) => ({
+      ...blank(start),
+      title: (s[0].toUpperCase() + s.slice(1)).slice(0, 160),
+      repeat,
+      time: within ? within.first : i && time ? "" : time,
+      ...(within ? { inDay: within.rule } : {}),
+      category: categoryFor(s),
+    }));
   });
 }

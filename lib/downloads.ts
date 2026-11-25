@@ -1,3 +1,4 @@
+import { slotTimes } from "./interval";
 import { zipSync, strToU8 } from "fflate";
 import {
   type Row,
@@ -50,6 +51,7 @@ export function workbook(rows: Row[], events: Entry[], habits: Habit[]) {
           "Reminder (IST)",
           "Frequency",
           "Archived",
+          "Check-in times (IST)",
         ],
         ...habits.map((h) => [
           h.title,
@@ -58,6 +60,7 @@ export function workbook(rows: Row[], events: Entry[], habits: Habit[]) {
           h.time,
           h.repeat,
           h.archived ? "Yes" : "No",
+          slotTimes(h.time, h.inDay).join(", "),
         ]),
       ],
     },
@@ -194,33 +197,38 @@ export function calendar(h: Habit) {
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Habit Grove//Planner//EN",
-    "BEGIN:VEVENT",
-    "UID:" + h.id + "@habitgrove",
-    "DTSTAMP:" + stamp(new Date()),
-    "DTSTART:" + stamp(new Date(start + "T" + h.time + ":00+05:30")),
-    "DURATION:PT5M",
-    "SUMMARY:" + escape(h.title),
   ];
-  // Keep the weekday rule on the Indian calendar even when the UTC day differs.
-  if (h.repeat === "Weekdays") {
-    const prev = h.time < "05:30";
+  for (const [i, time] of slotTimes(h.time, h.inDay).entries()) {
     line.push(
-      "RRULE:FREQ=WEEKLY;BYDAY=" + (prev ? "SU,MO,TU,WE,TH" : "MO,TU,WE,TH,FR"),
+      "BEGIN:VEVENT",
+      "UID:" + h.id + (i ? "-" + time.replace(":", "") : "") + "@habitgrove",
+      "DTSTAMP:" + stamp(new Date()),
+      "DTSTART:" + stamp(new Date(start + "T" + time + ":00+05:30")),
+      "DURATION:PT5M",
+      "SUMMARY:" + escape(h.title),
+    );
+    // Keep the weekday rule on the Indian calendar even when the UTC day differs.
+    if (h.repeat === "Weekdays") {
+      const prev = time < "05:30";
+      line.push(
+        "RRULE:FREQ=WEEKLY;BYDAY=" +
+          (prev ? "SU,MO,TU,WE,TH" : "MO,TU,WE,TH,FR"),
+      );
+    }
+    if (h.repeat === "Daily" || h.repeat === "Weekly")
+      line.push("RRULE:FREQ=" + h.repeat.toUpperCase());
+    line.push(
+      "DESCRIPTION:Open Habit Grove to check in.",
+      "URL:" + location.origin,
+      "BEGIN:VALARM",
+      "TRIGGER:PT0M",
+      "ACTION:DISPLAY",
+      "DESCRIPTION:" + escape("Check in: " + h.title),
+      "END:VALARM",
+      "END:VEVENT",
     );
   }
-  if (h.repeat === "Daily" || h.repeat === "Weekly")
-    line.push("RRULE:FREQ=" + h.repeat.toUpperCase());
-  line.push(
-    "DESCRIPTION:Open Habit Grove to check in.",
-    "URL:" + location.origin,
-    "BEGIN:VALARM",
-    "TRIGGER:PT0M",
-    "ACTION:DISPLAY",
-    "DESCRIPTION:" + escape("Check in: " + h.title),
-    "END:VALARM",
-    "END:VEVENT",
-    "END:VCALENDAR",
-  );
+  line.push("END:VCALENDAR");
   saveFile(
     line.join("\r\n") + "\r\n",
     "text/calendar;charset=utf-8",

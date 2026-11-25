@@ -1,3 +1,4 @@
+import { slotTimes } from "@/lib/interval";
 import { env } from "cloudflare:workers";
 import {
   categories,
@@ -119,6 +120,10 @@ export async function POST(req: Request) {
         !h.title.trim() ||
         h.title.length > 160 ||
         !date(h.start) ||
+        (h.inDay !== undefined &&
+          (!h.inDay ||
+            typeof h.inDay !== "object" ||
+            !slotTimes(h.time, h.inDay).length)) ||
         !categories.includes(h.category) ||
         !frequencies.includes(h.repeat) ||
         typeof h.time !== "string" ||
@@ -140,6 +145,14 @@ export async function POST(req: Request) {
         time: h.time,
         repeat: h.repeat,
         archived: h.archived === true,
+        ...(h.inDay
+          ? {
+              inDay:
+                "until" in h.inDay
+                  ? { hours: h.inDay.hours, until: h.inDay.until }
+                  : { hours: h.inDay.hours, count: h.inDay.count },
+            }
+          : {}),
       };
     } else if (e.kind === "status") {
       const v = e.payload;
@@ -161,7 +174,15 @@ export async function POST(req: Request) {
           { error: "This habit is not scheduled on that day." },
           409,
         );
-      data = { status: v.status, note: v.note };
+      const h = JSON.parse(plan!.payload) as Habit;
+      const slots = slotTimes(h.time, h.inDay);
+      const slot = v.slot ?? "";
+      if (typeof slot !== "string" || (slot && !slots.slice(1).includes(slot)))
+        return reply(
+          { error: "That check-in time has changed. Refresh the planner." },
+          409,
+        );
+      data = { status: v.status, note: v.note, slot };
     } else return reply({ error: "Unknown change." }, 400);
     ops.push(
       env

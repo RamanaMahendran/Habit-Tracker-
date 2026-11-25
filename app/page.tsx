@@ -53,6 +53,7 @@ import {
   type Habit,
   type Entry,
 } from "@/lib/habits";
+import { slotTimes, messageTime } from "@/lib/interval";
 import release from "../public/version.json";
 import { workbook, saveFile, calendar } from "@/lib/downloads";
 
@@ -277,6 +278,8 @@ function Modal({
   );
 }
 function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
+  const rule = h.inDay;
+  const times = slotTimes(h.time, rule);
   return (
     <div className="fields">
       <label>
@@ -325,14 +328,123 @@ function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
           />
         </label>
         <label>
-          Check-in time · IST
+          {rule ? "First check-in · IST" : "Check-in time · IST"}
           <input
             type="time"
+            required={!!rule}
             value={h.time}
             onChange={(e) => change({ ...h, time: e.target.value })}
           />
         </label>
       </div>
+      <label className="interval-switch">
+        <input
+          type="checkbox"
+          checked={!!rule}
+          onChange={(e) => {
+            if (e.target.checked)
+              change({
+                ...h,
+                time: h.time || "08:00",
+                inDay: {
+                  hours: 2,
+                  until: h.time && h.time > "16:00" ? "23:59" : "18:00",
+                },
+              });
+            else {
+              const { inDay, ...single } = h;
+              change(single);
+            }
+          }}
+        />
+        Repeat within the day
+      </label>
+      {rule && (
+        <>
+          <div className="pair">
+            <label>
+              Interval (hours)
+              <input
+                type="number"
+                required
+                min="1"
+                max="12"
+                step="1"
+                value={rule.hours || ""}
+                onChange={(e) =>
+                  change({
+                    ...h,
+                    inDay: { ...rule, hours: Number(e.target.value) },
+                  })
+                }
+              />
+            </label>
+            <label>
+              Stop repeating
+              <select
+                value={"until" in rule ? "until" : "count"}
+                onChange={(e) =>
+                  change({
+                    ...h,
+                    inDay:
+                      e.target.value === "until"
+                        ? { hours: rule.hours, until: times.at(-1) || "18:00" }
+                        : { hours: rule.hours, count: times.length || 2 },
+                  })
+                }
+              >
+                <option value="until">At end time</option>
+                <option value="count">After a number of check-ins</option>
+              </select>
+            </label>
+          </div>
+          {"until" in rule ? (
+            <label>
+              End time · IST
+              <input
+                type="time"
+                required
+                min={h.time}
+                value={rule.until}
+                onChange={(e) =>
+                  change({
+                    ...h,
+                    inDay: { hours: rule.hours, until: e.target.value },
+                  })
+                }
+              />
+            </label>
+          ) : (
+            <label>
+              Check-ins per day
+              <input
+                type="number"
+                required
+                min="2"
+                max="24"
+                step="1"
+                value={rule.count || ""}
+                onChange={(e) =>
+                  change({
+                    ...h,
+                    inDay: { hours: rule.hours, count: Number(e.target.value) },
+                  })
+                }
+              />
+            </label>
+          )}
+          <p
+            className={times.length ? "interval-preview" : "interval-error"}
+            aria-live="polite"
+          >
+            {times.length
+              ? times.length +
+                " check-ins · " +
+                times.map(displayTime).join(", ")
+              : "Choose an interval and times that fit at least two check-ins before midnight."}
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -393,7 +505,7 @@ export default function App() {
       const key = r.id + today + r.time;
       if (!lastToast.current.has(key)) {
         lastToast.current.add(key);
-        setToast("Check-in due · " + r.title);
+        setToast("Check-in due · " + r.title + " · " + displayTime(r.time));
         if (
           typeof Notification !== "undefined" &&
           Notification.permission === "granted" &&
@@ -402,7 +514,7 @@ export default function App() {
           navigator.serviceWorker.ready
             .then((reg) =>
               reg.showNotification("Habit Grove check-in", {
-                body: r.title,
+                body: r.title + " · " + displayTime(r.time),
                 tag: key,
                 icon: "/icon-192.png",
               }),
@@ -444,11 +556,13 @@ export default function App() {
           habit: r.id,
           kind: "status",
           day: r.day,
-          payload: { status, note },
+          payload: { status, note, slot: r.slot },
         },
       ])
     ) {
-      setToast(r.title + " · " + status);
+      setToast(
+        r.title + (r.inDay ? " · " + displayTime(r.time) : "") + " · " + status,
+      );
       setChatHelp("");
       return true;
     }
@@ -456,6 +570,7 @@ export default function App() {
   }
   async function submitDraft(e: FormEvent) {
     e.preventDefault();
+    if (draft?.inDay && !slotTimes(draft.time, draft.inDay).length) return;
     if (draft && (await save([planChange(draft)]))) {
       setToast(editing ? "Habit updated" : "Added to your planner");
       setDraft(null);
@@ -529,7 +644,9 @@ export default function App() {
         .split(/[^a-z0-9]+/)
         .filter((t) => t.length > 1 && !stop.has(t));
     const terms = tokens(s);
+    const requestedTime = messageTime(s);
     const ranks = possible
+      .filter((r) => !requestedTime || r.time === requestedTime)
       .map((r) => ({
         r,
         n: tokens(r.title).filter((t) => terms.includes(t)).length,
@@ -543,7 +660,7 @@ export default function App() {
           : null;
     if (!pick) {
       setChatHelp(
-        "Which habit did you mean? Include its name or use its check-in buttons.",
+        "Which check-in did you mean? Include its name and time, for example “Finished my walk at 10 am”, or tap its button.",
       );
       return;
     }
@@ -805,11 +922,12 @@ export default function App() {
                 {view === "Scheduled" ? (
                   rows.length ? (
                     rows.map((r) => (
-                      <div className="habitrow" key={r.id}>
+                      <div className="habitrow" key={r.id + r.slot}>
                         <button
                           aria-label={
                             (r.status === "Done" ? "Reopen " : "Complete ") +
-                            r.title
+                            r.title +
+                            (r.inDay ? " at " + displayTime(r.time) : "")
                           }
                           disabled={busy || day > today}
                           className={
@@ -869,7 +987,11 @@ export default function App() {
                         <div className="stretch">
                           <b>{h.title}</b>
                           <small>
-                            {h.repeat} · {displayTime(h.time)}
+                            {h.repeat} ·{" "}
+                            {h.inDay
+                              ? "Every " + h.inDay.hours + " hours from "
+                              : ""}
+                            {displayTime(h.time)}
                           </small>
                         </div>
                         <SquarePen size={17} />
@@ -993,7 +1115,7 @@ export default function App() {
                 </div>
               )}
               {rows.map((r) => (
-                <div key={r.id} className="thread">
+                <div key={r.id + r.slot} className="thread">
                   <div className="bubble">
                     <small>
                       <Bell size={13} />{" "}
@@ -1037,7 +1159,9 @@ export default function App() {
                       (e) =>
                         e.kind === "status" &&
                         e.habit === r.id &&
-                        e.day === day,
+                        e.day === day &&
+                        ((e.payload as { slot?: string }).slot || "") ===
+                          r.slot,
                     )
                     .map((e) => {
                       const p = e.payload as { note: string; status: string };
@@ -1133,7 +1257,7 @@ export default function App() {
                   </thead>
                   <tbody>
                     {history.slice(0, limit).map((r) => (
-                      <tr key={r.id + r.day}>
+                      <tr key={r.id + r.day + r.slot}>
                         <td>{r.day}</td>
                         <td>{r.title}</td>
                         <td>{r.category}</td>
@@ -1261,7 +1385,10 @@ export default function App() {
                   <CalendarPlus size={16} /> Calendar reminder
                 </button>
               )}
-              <button className="primary" disabled={busy}>
+              <button
+                className="primary"
+                disabled={busy || !slotTimes(draft.time, draft.inDay).length}
+              >
                 {busy ? "Saving…" : "Save habit"}
               </button>
             </div>
@@ -1288,6 +1415,8 @@ export default function App() {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
+              if (proposals.some((h) => !slotTimes(h.time, h.inDay).length))
+                return;
               if (await save(proposals.map(planChange))) {
                 setProposals([]);
                 setPrompt("");
@@ -1304,7 +1433,13 @@ export default function App() {
                 }
               />
             ))}
-            <button className="primary" disabled={busy}>
+            <button
+              className="primary"
+              disabled={
+                busy ||
+                proposals.some((h) => !slotTimes(h.time, h.inDay).length)
+              }
+            >
               Add{" "}
               {proposals.length === 1 ? "habit" : proposals.length + " habits"}
             </button>

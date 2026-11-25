@@ -1007,3 +1007,28 @@ footer .updatebtn {
 footer {
   flex-wrap: wrap;
 }
+.fields .interval-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.interval-switch input {
+  accent-color: var(--forest);
+  width: 18px;
+  height: 18px;
+}
+.interval-preview,
+.interval-error {
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.interval-preview {
+  background: #eef4e8;
+  color: #3b593d;
+}
+.interval-error {
+  color: #8b3a22;
+  background: #fff2e8;
+}
