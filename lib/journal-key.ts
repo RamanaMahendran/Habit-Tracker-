@@ -4,10 +4,12 @@ const KEY_PATTERN = /^[0-9a-f]{64}$/;
 let startup: Promise<string> | undefined;
 
 export function parseRecoveryCode(input: string): string | null {
-  const key = input
-    .trim()
-    .replace(/^HG1-/i, "")
-    .replace(/[\s-]/g, "")
+  const content = input.trim().replace(/[\u200b-\u200f\ufeff]/g, "");
+  const recoveryFile = /^Habit Grove recovery code\s*\n\s*(HG1-[^\r\n]+)/i;
+  const code = content.match(recoveryFile)?.[1] ?? content;
+  const key = code
+    .replace(/^HG1[-\u2010-\u2014]/i, "")
+    .replace(/[\s\u2010-\u2014-]/g, "")
     .toLowerCase();
   return KEY_PATTERN.test(key) ? key : null;
 }

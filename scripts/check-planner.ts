@@ -1,3 +1,4 @@
+import { formatRecoveryCode, parseRecoveryCode } from "../lib/journal-key";
 import {
   periodBounds,
   shiftPeriod,
@@ -199,3 +200,20 @@ assert.equal(
   29,
 );
 console.log("Calendar ranges and progress totals passed.");
+
+const sampleKey = "0123456789abcdef".repeat(4);
+const code = formatRecoveryCode(sampleKey);
+assert.equal(parseRecoveryCode(code), sampleKey);
+assert.equal(
+  parseRecoveryCode(
+    "Habit Grove recovery code\r\n\r\n" + code + "\r\n\r\nKeep this private.",
+  ),
+  sampleKey,
+);
+assert.equal(
+  parseRecoveryCode(code.replaceAll("-", "–").replace("89ab", "89\u200bab")),
+  sampleKey,
+);
+assert.equal(parseRecoveryCode(code.slice(0, -1)), null);
+assert.equal(parseRecoveryCode(code + "xyz"), null);
+console.log("Journal recovery code checks passed.");

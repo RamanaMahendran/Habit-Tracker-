@@ -854,7 +854,9 @@ export default function App() {
     }
   }
   useEffect(() => {
-    if (location.search.includes("view=chat")) setTab("Check-in chat");
+    const params = new URLSearchParams(location.search);
+    if (params.get("view") === "chat") setTab("Check-in chat");
+    if (params.get("view") === "habits") setView("All habits");
     if ("serviceWorker" in navigator)
       navigator.serviceWorker
         .register("/sw.js", { updateViaCache: "none" })
@@ -1149,12 +1151,26 @@ export default function App() {
                         <Sprout />
                       </span>
                       <p>
-                        No habits scheduled for{" "}
-                        {day === today ? "today" : "this day"}.
+                        {state === "Connecting"
+                          ? "Loading your journal…"
+                          : `No habits scheduled for ${day === today ? "today" : "this day"}.`}
                       </p>
-                      <button className="linkbtn" onClick={() => newDraft()}>
-                        Add a habit
-                      </button>
+                      {state === "Cloud synced" &&
+                        (journal.current.some((h) => !h.archived) ? (
+                          <button
+                            className="linkbtn"
+                            onClick={() => setView("All habits")}
+                          >
+                            See all saved habits
+                          </button>
+                        ) : (
+                          <button
+                            className="linkbtn"
+                            onClick={() => setAccess(true)}
+                          >
+                            Open a journal from another device
+                          </button>
+                        ))}
                     </div>
                   )
                 ) : journal.current.filter((h) => !h.archived).length ? (
@@ -1182,10 +1198,35 @@ export default function App() {
                     ))
                 ) : (
                   <div className="empty">
-                    <p>Your saved habits will appear here.</p>
-                    <button className="linkbtn" onClick={() => newDraft()}>
-                      Create your first habit
-                    </button>
+                    {state === "Connecting" ? (
+                      <p>Loading your journal…</p>
+                    ) : (
+                      state === "Cloud synced" &&
+                      (events.length ? (
+                        <>
+                          <p>There are no active habits in this journal.</p>
+                          <button
+                            className="linkbtn"
+                            onClick={() => {
+                              nav("Analytics");
+                              setPeriod("all");
+                            }}
+                          >
+                            See activity history
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <p>This journal has no saved habits.</p>
+                          <button
+                            className="linkbtn"
+                            onClick={() => setAccess(true)}
+                          >
+                            Open another journal
+                          </button>
+                        </>
+                      ))
+                    )}
                   </div>
                 )}
               </section>

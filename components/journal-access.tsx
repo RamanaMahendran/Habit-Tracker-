@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import {
   formatRecoveryCode,
   journalKey,
@@ -22,7 +22,8 @@ export function JournalAccess({
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false);
   const [shown, setShown] = useState(""),
-    [confirmed, setConfirmed] = useState(false);
+    [confirmed, setConfirmed] = useState(false),
+    [needsBackup, setNeedsBackup] = useState(false);
   async function downloadCode() {
     try {
       const code = formatRecoveryCode(await journalKey());
@@ -38,33 +39,46 @@ export function JournalAccess({
       setNotice((e as Error).message);
     }
   }
-  async function restore() {
+  async function hasSavedData(key: string) {
+    const response = await journalFetch("/api/journal?after=0", {}, key);
+    if (!response.ok)
+      throw Error("Could not reach the cloud journal. Try again.");
+    const { events } = (await response.json()) as { events?: unknown[] };
+    if (!Array.isArray(events))
+      throw Error("Could not read the cloud journal. Try again.");
+    return events.length > 0;
+  }
+  async function restore(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
     const key = parseRecoveryCode(input);
     if (!key) {
-      setNotice("Enter the full code from your recovery file.");
+      setNotice(
+        "That code is incomplete or invalid. On the device with your habits, open Journal access and copy the full HG1 code.",
+      );
       return;
     }
     setBusy(true);
+    setNotice("Checking the recovery code…");
     try {
-      if (key === (await journalKey())) {
-        setNotice("This device already uses that journal.");
-        return;
-      }
-      const response = await journalFetch("/api/journal?after=0", {}, key);
-      if (!response.ok) throw Error("Could not check that journal. Try again.");
-      const data = (await response.json()) as { events: unknown[] };
-      if (!data.events.length)
-        throw Error(
-          "No saved habits were found for this code. Check the code and try again.",
-        );
-      if (hasHabits && !confirmed) {
+      if (!(await hasSavedData(key))) {
         setNotice(
-          "Save this device’s current recovery code before switching journals.",
+          "This code opens an empty journal. Copy the code from the browser that shows your habits.",
         );
         return;
       }
-      storeJournalKey(key);
-      location.reload();
+      const currentKey = await journalKey();
+      if (key !== currentKey) {
+        if (!confirmed && (hasHabits || (await hasSavedData(currentKey)))) {
+          setNeedsBackup(true);
+          setNotice(
+            "Save this device’s recovery code and tick the checkbox to keep access to its journal.",
+          );
+          return;
+        }
+        storeJournalKey(key);
+      }
+      location.replace("/?view=habits");
     } catch (e) {
       setNotice((e as Error).message);
     } finally {
@@ -97,23 +111,53 @@ export function JournalAccess({
       {shown && (
         <div className="recoverycode">
           <code>{shown}</code>
+          <button
+            className="secondary"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(shown);
+                setNotice("Recovery code copied.");
+              } catch {
+                setNotice(
+                  "Select the code above and copy it, or save the recovery file.",
+                );
+              }
+            }}
+          >
+            Copy code
+          </button>
           <small>Anyone with this code can access your habits.</small>
         </div>
       )}
-      <details>
-        <summary>Open an existing journal</summary>
+      <form className="recover-journal" onSubmit={restore}>
+        <h3>Open an existing journal</h3>
+        <p>Use the code from the device where your habits appear.</p>
         <label>
           Recovery code
           <input
             type="password"
             autoComplete="off"
+            autoCapitalize="none"
+            enterKeyHint="go"
+            disabled={busy}
             spellCheck={false}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setNotice("");
+            }}
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text");
+              const key = parseRecoveryCode(pasted);
+              if (!key) return;
+              e.preventDefault();
+              setInput(formatRecoveryCode(key));
+              setNotice("");
+            }}
             placeholder="HG1-…"
           />
         </label>
-        {hasHabits && (
+        {(hasHabits || needsBackup) && (
           <label className="confirmkey">
             <input
               type="checkbox"
@@ -123,14 +167,11 @@ export function JournalAccess({
             I saved the recovery code for this device’s current journal.
           </label>
         )}
-        <button
-          className="secondary"
-          disabled={busy || !input.trim()}
-          onClick={restore}
-        >
-          Open journal
+        <button className="secondary" disabled={busy || !input.trim()}>
+          {busy ? "Checking…" : "Open journal"}
         </button>
-      </details>
+        {notice && <p role="status">{notice}</p>}
+      </form>
       <details open={legacyAvailable || undefined}>
         <summary>Bring over habits from version 1.0</summary>
         {legacyAvailable ? (
@@ -167,7 +208,6 @@ export function JournalAccess({
           </p>
         )}
       </details>
-      {notice && <p role="status">{notice}</p>}
     </div>
   );
 }

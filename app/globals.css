@@ -1320,3 +1320,26 @@ footer {
   height: 100%;
   background: var(--forest);
 }
+
+.recover-journal {
+  border-top: 1px solid var(--line);
+  margin-top: 18px;
+  padding-top: 15px;
+}
+.recover-journal h3 {
+  font-size: 1.05rem;
+}
+.recover-journal input[type="password"] {
+  min-height: 42px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+.recoverycode button {
+  margin: 8px 0;
+}
+.recoverycode small {
+  display: block;
+}
