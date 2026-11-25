@@ -227,7 +227,7 @@ export function answerPlan(
     const flexible = pending.filter((r) => !r.time);
     const parts = [
       late.length
-        ? "First, review overdue check-ins in chat: " +
+        ? "First, review overdue check-ins in Planner: " +
           late.map(scheduleLine).join(", ") +
           "."
         : "",

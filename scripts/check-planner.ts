@@ -1,3 +1,4 @@
+import { productivityArea } from "../lib/productivity";
 import { formatRecoveryCode, parseRecoveryCode } from "../lib/journal-key";
 import {
   periodBounds,
@@ -217,3 +218,10 @@ assert.equal(
 assert.equal(parseRecoveryCode(code.slice(0, -1)), null);
 assert.equal(parseRecoveryCode(code + "xyz"), null);
 console.log("Journal recovery code checks passed.");
+
+assert.equal(productivityArea("Work"), "Work");
+assert.equal(productivityArea("Learning"), "Personal");
+assert.equal(productivityArea("Routines"), "Personal");
+for (const category of ["Health", "Wellness", "Mindfulness"])
+  assert.equal(productivityArea(category), "Wellbeing");
+console.log("Productivity area checks passed.");
