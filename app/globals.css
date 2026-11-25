@@ -5,16 +5,24 @@
   --muted: #637369;
   --line: #e0e6dc;
   --page: #f6f8f3;
-  --serif: Georgia, "Times New Roman", serif;
-  font:
-    16px/1.45 "DM Sans",
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--ink);
   background: var(--page);
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+small,
+code {
+  font-size: inherit;
+}
+code {
+  font-family: inherit;
 }
 * {
   box-sizing: border-box;
@@ -64,12 +72,11 @@ header {
   gap: 50px;
 }
 .brand {
-  font: 600 27px var(--serif);
+  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 10px;
   white-space: nowrap;
-  letter-spacing: -1.4px;
   padding: 0;
 }
 .brand img {
@@ -96,7 +103,6 @@ footer span,
 nav button {
   gap: 8px;
   font-weight: 600;
-  font-size: 0.92rem;
   padding: 10px 15px;
   border-radius: 9px;
   color: #536257;
@@ -133,7 +139,6 @@ footer,
   margin-bottom: 20px;
 }
 .eyebrow {
-  font-size: 0.75rem;
   letter-spacing: 0.13em;
   font-weight: 700;
   text-transform: uppercase;
@@ -153,21 +158,16 @@ p {
 }
 h1,
 h2 {
-  font-family: var(--serif);
   font-weight: 500;
-  letter-spacing: -0.045em;
 }
 h1 {
-  font-size: clamp(2.4rem, 4vw, 3.4rem);
   line-height: 1.12;
   margin-top: 7px;
 }
 h2 {
-  font-size: 1.9rem;
   line-height: 1.15;
 }
 h3 {
-  font-size: 1rem;
   font-weight: 650;
 }
 .primary,
@@ -182,12 +182,10 @@ h3 {
   padding: 11px 17px;
   border-radius: 10px;
   font-weight: 600;
-  font-size: 0.92rem;
 }
 .primary.small {
   padding: 7px 12px;
   border-radius: 8px;
-  font-size: 0.85rem;
 }
 .secondary {
   background: #eef3e9;
@@ -214,7 +212,6 @@ h3 {
   gap: 3px;
 }
 .week-today {
-  font-size: 0.88rem;
   font-weight: 600;
 }
 .iconbtn {
@@ -247,11 +244,9 @@ h3 {
   background: #f6f8f3;
 }
 .week small {
-  font-size: 0.78rem;
   color: #677768;
 }
 .week strong {
-  font-size: 1.18rem;
   font-weight: 600;
 }
 .week i {
@@ -278,7 +273,6 @@ h3 {
 .listhead select,
 .analyticshead select {
   padding: 6px 27px 6px 10px;
-  font-size: 0.85rem;
   background-color: #f8f9f6;
 }
 .habitrow {
@@ -295,7 +289,6 @@ h3 {
 }
 .habitrow small,
 .chathead small {
-  font-size: 0.83rem;
   color: var(--muted);
   margin-top: 3px;
 }
@@ -362,7 +355,6 @@ h3 {
   padding: 22px 10px;
   text-align: center;
   color: var(--muted);
-  font-size: 0.93rem;
 }
 .empty .empty-icon {
   margin: 0 auto 7px;
@@ -371,7 +363,6 @@ h3 {
   margin: 4px auto 0;
 }
 .linkbtn {
-  font-size: 0.9rem;
   color: var(--forest);
   font-weight: 650;
 }
@@ -391,7 +382,6 @@ h3 {
 .assistant p {
   margin: 10px 0 13px;
   color: #506354;
-  font-size: 0.93rem;
 }
 .planner-prompts {
   display: flex;
@@ -405,7 +395,6 @@ h3 {
   border: 1px solid #ccd9c6;
   border-radius: 14px;
   padding: 5px 10px;
-  font-size: 0.8rem;
 }
 .planner-dialogue {
   overflow-y: auto;
@@ -442,7 +431,6 @@ h3 {
   resize: vertical;
   min-height: 46px;
   display: block;
-  font-size: 0.92rem;
   padding: 2px 3px;
   line-height: 1.4;
 }
@@ -472,7 +460,6 @@ h3 {
   background: #edf3e8;
   border-radius: 7px;
   padding: 5px 9px;
-  font-size: 0.85rem;
 }
 .send {
   padding: 10px;
@@ -498,7 +485,6 @@ table {
   border-collapse: collapse;
   min-width: 580px;
   width: 100%;
-  font-size: 0.9rem;
   text-align: left;
 }
 td,
@@ -513,7 +499,6 @@ th {
   padding: 4px 8px;
   border-radius: 15px;
   background: #ecede8;
-  font-size: 0.83rem;
 }
 .pill.done {
   background: #ddecce;
@@ -523,7 +508,6 @@ th {
 }
 footer {
   color: var(--muted);
-  font-size: 0.78rem;
   margin-top: 18px;
 }
 footer span {
@@ -543,9 +527,6 @@ dialog {
 dialog::backdrop {
   background: #122a2080;
 }
-dialog h2 {
-  font-size: 1.8rem;
-}
 .fields {
   display: grid;
   gap: 12px;
@@ -554,7 +535,6 @@ dialog h2 {
 .fields label {
   display: grid;
   gap: 5px;
-  font-size: 0.86rem;
   color: #45584a;
   font-weight: 600;
 }
@@ -575,7 +555,6 @@ select {
   padding-right: 26px;
 }
 .hint {
-  font-size: 0.84rem;
   color: var(--muted);
   align-items: flex-start;
   gap: 8px;
@@ -649,9 +628,6 @@ dialog:modal {
   }
 }
 @media (max-width: 700px) {
-  .eyebrow {
-    font-size: 0.68rem;
-  }
   .card {
     padding: 17px;
   }
@@ -664,9 +640,6 @@ dialog:modal {
   .chathead,
   .chatcompose {
     padding: 12px;
-  }
-  footer {
-    font-size: 0.68rem;
   }
 }
 
@@ -681,7 +654,6 @@ dialog:modal {
 }
 .installinfo p {
   margin-top: 4px;
-  font-size: 0.9rem;
 }
 .notifyline {
   display: flex;
@@ -689,7 +661,6 @@ dialog:modal {
   gap: 5px;
   padding: 4px 20px 10px;
   color: var(--muted);
-  font-size: 0.83rem;
 }
 .notifyline button {
   text-decoration: underline;
@@ -697,7 +668,6 @@ dialog:modal {
 }
 .journalaccess p {
   margin: 14px 0;
-  font-size: 0.95rem;
 }
 .journalaccess details {
   border-top: 1px solid var(--line);
@@ -714,7 +684,6 @@ dialog:modal {
   display: grid;
   gap: 6px;
   margin: 12px 0;
-  font-size: 0.88rem;
 }
 .journalaccess .confirmkey {
   display: flex;
@@ -766,7 +735,6 @@ footer {
 .interval-error {
   padding: 9px 12px;
   border-radius: 8px;
-  font-size: 0.85rem;
 }
 .interval-preview {
   background: #eef4e8;
@@ -779,9 +747,6 @@ footer {
 .sound-settings {
   padding: 12px 20px;
   border-top: 1px solid var(--line);
-}
-.sound-settings strong {
-  font-size: 0.92rem;
 }
 .sound-settings .choices {
   margin: 6px 0;
@@ -800,7 +765,6 @@ footer {
 .category-result {
   margin: 0;
   color: var(--muted);
-  font-size: 0.9rem;
 }
 .category-result strong,
 .day-timeline small,
@@ -858,13 +822,6 @@ footer {
   margin-top: 12px;
   padding-top: 12px;
 }
-.book-topic h3 {
-  font-size: 1rem;
-}
-.book-topic p,
-.book-topic summary {
-  font-size: 0.93rem;
-}
 .book-topic summary {
   cursor: pointer;
   color: var(--forest);
@@ -876,7 +833,6 @@ footer {
 .day-heading label {
   display: grid;
   gap: 3px;
-  font-size: 0.9rem;
 }
 .day-heading input {
   font: inherit;
@@ -941,7 +897,6 @@ footer {
   }
   .day-timeline time {
     width: 4.6rem;
-    font-size: 0.9rem;
   }
 }
 .period-tabs {
@@ -958,7 +913,6 @@ footer {
 .period-tabs button {
   color: var(--forest);
   padding: 7px 12px;
-  font-size: 0.9rem;
   border-radius: 7px;
 }
 .period-tabs button[aria-pressed="true"] {
@@ -970,7 +924,6 @@ footer {
   align-items: center;
   gap: 9px;
   margin-top: 12px;
-  font-size: 0.94rem;
 }
 .period-dates button:disabled {
   opacity: 0.35;
@@ -986,7 +939,6 @@ footer {
   gap: 12px;
 }
 .trend-labels {
-  font-size: 0.85rem;
   color: var(--muted);
   padding: 8px 0;
 }
@@ -995,7 +947,6 @@ footer {
   text-align: left;
   border-top: 1px solid var(--line);
   padding: 9px 0;
-  font-size: 0.92rem;
   font-variant-numeric: tabular-nums;
 }
 .trend-row:hover {
@@ -1033,7 +984,6 @@ footer {
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  font-size: 1rem;
 }
 .recoverycode button {
   margin: 8px 0;
@@ -1060,7 +1010,6 @@ footer {
   min-height: 42px;
   padding: 6px 8px;
   border-radius: 8px;
-  font-size: 0.86rem;
 }
 .header-tools button:hover {
   background: #edf3e9;
@@ -1092,9 +1041,6 @@ footer {
 .planner-side .chat {
   width: 100%;
   scroll-margin-top: 16px;
-}
-.planner-side .chat h2 {
-  font-size: 1.65rem;
 }
 .assistant summary {
   cursor: pointer;
@@ -1136,7 +1082,7 @@ footer {
   font-weight: 650;
 }
 .productivity-areas strong {
-  font: 600 1.55rem var(--serif);
+  font-weight: 600;
 }
 .productivity-areas small {
   color: var(--muted);
@@ -1205,8 +1151,6 @@ footer {
     padding-top: max(4px, env(safe-area-inset-top));
   }
   .headwrap .brand {
-    font-size: 21px;
-    letter-spacing: -0.7px;
     gap: 6px;
   }
   .headwrap .brand img {
@@ -1221,7 +1165,6 @@ footer {
     min-height: 44px;
     gap: 4px;
     padding: 5px 8px;
-    font-size: 0.82rem;
   }
   .header-tools svg {
     display: block;
@@ -1245,7 +1188,6 @@ footer {
     min-width: 0;
     gap: 3px;
     min-height: 47px;
-    font-size: 0.79rem;
     padding: 5px 4px;
     line-height: 1.15;
   }
@@ -1258,11 +1200,9 @@ footer {
     margin-bottom: 10px;
   }
   .page-head h1 {
-    font-size: clamp(1.6rem, 7vw, 2rem);
     margin-top: 3px;
   }
   .page-head .eyebrow {
-    font-size: 0.72rem;
     letter-spacing: 0.02em;
   }
   .page-head .date-line {
@@ -1273,13 +1213,11 @@ footer {
     gap: 5px;
     min-height: 44px;
     padding: 7px 10px;
-    font-size: 0.85rem;
   }
   .planner-summary {
     min-height: 44px;
     padding: 0 10px;
     gap: 4px;
-    font-size: 0.89rem;
   }
   .planner-summary a:not(.desktop-label) {
     min-height: 44px;
@@ -1311,7 +1249,6 @@ footer {
     min-width: 0;
     min-height: 42px;
     border-radius: 7px;
-    font-size: 0.89rem;
     font-weight: 600;
     color: var(--forest);
   }
@@ -1326,7 +1263,6 @@ footer {
   .planner-side .chat h2 {
     font: inherit;
     font-weight: 650;
-    font-size: 1.05rem;
     letter-spacing: 0;
   }
   .schedule[data-list-view="all"] .week-controls,
@@ -1348,12 +1284,6 @@ footer {
     min-height: 46px;
     border-radius: 8px;
   }
-  .week small {
-    font-size: 0.72rem;
-  }
-  .week strong {
-    font-size: 1.03rem;
-  }
   .habitrow {
     min-height: 58px;
     padding: 6px 0;
@@ -1361,11 +1291,9 @@ footer {
     overflow-wrap: anywhere;
   }
   .habitrow b {
-    font-size: 0.96rem;
     line-height: 1.25;
   }
   .habitrow small {
-    font-size: 0.82rem;
     line-height: 1.35;
   }
   .habitrow .badge {
@@ -1409,7 +1337,6 @@ footer {
   .fields input,
   .fields select,
   .recover-journal input[type="password"] {
-    font-size: 1rem;
     min-height: 44px;
   }
   .chatcompose button,
@@ -1433,9 +1360,6 @@ footer {
     background: #fff;
     padding: 8px 0;
     border-bottom: 1px solid var(--line);
-  }
-  dialog .dialog-heading h2 {
-    font-size: 1.55rem;
   }
   dialog .dialog-heading button {
     width: 44px;
@@ -1498,9 +1422,6 @@ footer {
 }
 
 @media (max-width: 350px) {
-  .headwrap .brand {
-    font-size: 19px;
-  }
   .header-tools button {
     padding: 5px;
   }
@@ -1560,7 +1481,6 @@ footer {
 .check-in-empty,
 .check-in-feedback {
   color: var(--muted);
-  font-size: 0.91rem;
 }
 .due-check-in {
   border-radius: 10px;
@@ -1574,7 +1494,6 @@ footer {
   align-items: center;
   gap: 4px;
   color: #79532a;
-  font-size: 0.83rem;
 }
 .due-check-in-top .iconbtn {
   flex: 0 0 44px;
@@ -1655,9 +1574,6 @@ footer {
 }
 
 @media (max-width: 700px) {
-  :root {
-    font-size: 15px;
-  }
   .planner-head > div {
     position: absolute;
     width: 1px;
@@ -1668,7 +1584,6 @@ footer {
   .planner-head > .primary {
     width: 100%;
     min-height: 44px;
-    font-size: 0.95rem;
   }
   .columns .planner-side {
     display: contents;
@@ -1692,11 +1607,5 @@ footer {
   }
   .check-in-feed .chathead {
     padding: 6px 12px;
-  }
-  .chatcompose input,
-  .fields input,
-  .fields select,
-  .recover-journal input[type="password"] {
-    font-size: 16px;
   }
 }
