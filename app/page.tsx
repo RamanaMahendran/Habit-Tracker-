@@ -31,7 +31,6 @@ import {
   Download,
   X,
   Ellipsis,
-  CheckCheck,
   SquarePen,
   CloudCheck,
   KeyRound,
@@ -67,7 +66,6 @@ import { ProgressDashboard } from "@/components/daily-progress";
 import { classification, topics } from "@/lib/categories";
 import { slotTimes, messageTime } from "@/lib/interval";
 import {
-  SoundSettings,
   ring,
   soundEnabled,
   useAudioUnlock,
@@ -75,6 +73,7 @@ import {
 import release from "../public/version.json";
 import { workbook, saveFile, calendar } from "@/lib/downloads";
 
+import { CheckInFeed } from "@/components/check-in-feed";
 import { JournalAccess } from "@/components/journal-access";
 import { journalFetch, onJournalSwitch } from "@/lib/journal-key";
 
@@ -576,10 +575,11 @@ export default function App() {
   const [recordError, setRecordError] = useState("");
   const today = indiaDay(now),
     rows = journal.rows(day),
-    chatRows = rows.filter((r) => r.status !== "Pending" || isOverdue(r, now)),
+    pendingCheckIns = rows.filter((r) => isOverdue(r, now)),
+    recordedCheckIns = rows.filter((r) => r.status !== "Pending"),
     scheduled = rows.filter((r) => !r.outsideDay),
     done = scheduled.filter((r) => r.status === "Done").length,
-    overdue = chatRows.filter((r) => r.status === "Pending").length;
+    overdue = pendingCheckIns.length;
   const plannerEnd = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const panel = plannerEnd.current?.parentElement;
@@ -761,7 +761,7 @@ export default function App() {
           : "";
     if (!status) {
       setChatHelp(
-        "Try “Finished my walk” or “Skipped reading yesterday”. You can also use the buttons below each check-in.",
+        "Try “Finished my walk” or “Skipped reading yesterday”. You can also tap Done or Skip on an overdue check-in.",
       );
       return;
     }
@@ -1094,17 +1094,31 @@ export default function App() {
                 </strong>{" "}
                 completed
               </span>
-              <a href="#check-ins">
+              <a className="desktop-label" href="#check-ins">
                 <MessageCircle size={16} />
                 {overdue ? `${overdue} overdue` : "Check-ins"}
+              </a>
+              <a className="phone-label" href="#habit-schedule">
+                Go to schedule
               </a>
             </div>
             <div className="columns">
               <section
+                id="habit-schedule"
                 className="card schedule"
                 data-list-view={view === "All habits" ? "all" : "scheduled"}
                 aria-label="Habit schedule"
               >
+                <div className="row schedule-head">
+                  <div>
+                    {iconTitle(CalendarDays, "Schedule")}
+                    <h2>
+                      <span className="desktop-label">My habits</span>
+                      <span className="phone-label">Planner</span>
+                    </h2>
+                  </div>
+                  {weekControls}
+                </div>
                 <div
                   className="phone-list-switch"
                   role="group"
@@ -1119,13 +1133,6 @@ export default function App() {
                       {mode}
                     </button>
                   ))}
-                </div>
-                <div className="row schedule-head">
-                  <div>
-                    {iconTitle(CalendarDays, "Schedule")}
-                    <h2>My habits</h2>
-                  </div>
-                  {weekControls}
                 </div>
                 {week}
                 <div className="row listhead">
@@ -1297,144 +1304,42 @@ export default function App() {
                 )}
               </section>
               <aside className="planner-side">
-                <section
-                  className="card chat"
-                  id="check-ins"
-                  aria-label="Check-ins"
+                <CheckInFeed
+                  day={day}
+                  today={today}
+                  pending={pendingCheckIns}
+                  recorded={recordedCheckIns}
+                  events={events}
+                  busy={busy}
+                  onMark={mark}
+                  onEdit={(r) =>
+                    edit(journal.current.find((h) => h.id === r.id) || r)
+                  }
                 >
-                  <div className="chathead">
-                    <h2>Check-ins</h2>
-                  </div>
-                  <SoundSettings />
-                  <div className="chatbody">
-                    <span className="datetag">
-                      {displayDay(day, {
-                        weekday: "long",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </span>
-                    {chatRows.length === 0 && (
-                      <div className="bubble">
-                        {rows.length
-                          ? "No overdue check-ins."
-                          : "No habits scheduled for this day."}
-                      </div>
-                    )}
-                    {chatRows.map((r) => (
-                      <div key={r.id + r.slot} className="thread">
-                        <div className="bubble">
-                          <small>
-                            <Bell size={13} />{" "}
-                            {r.time ? displayTime(r.time) + " IST" : "Anytime"}{" "}
-                            · {r.status === "Pending" ? "Overdue" : r.status}
-                          </small>
-                          <p>
-                            {r.status === "Pending" ? (
-                              <>
-                                Did you complete <b>{r.title}</b>?
-                              </>
-                            ) : (
-                              <b>{r.title}</b>
-                            )}
-                          </p>
-                          <div className="choices">
-                            {["Done", "Skipped", "Pending"]
-                              .filter(
-                                (s) =>
-                                  s !== r.status &&
-                                  (s !== "Pending" || r.status !== "Pending"),
-                              )
-                              .map((s) => (
-                                <button
-                                  disabled={
-                                    busy ||
-                                    day > today ||
-                                    (!!r.rolling &&
-                                      r.status === "Pending" &&
-                                      !r.next)
-                                  }
-                                  key={s}
-                                  onClick={() => mark(r, s)}
-                                >
-                                  {s === "Pending"
-                                    ? "Reopen"
-                                    : s === "Skipped"
-                                      ? "Skip"
-                                      : s}
-                                </button>
-                              ))}
-                            {r.rolling && r.status === "Done" && (
-                              <button onClick={() => mark(r, "Done")}>
-                                Edit actual time
-                              </button>
-                            )}
-                            <button
-                              onClick={() =>
-                                edit(
-                                  journal.current.find((h) => h.id === r.id) ||
-                                    r,
-                                )
-                              }
-                            >
-                              Edit habit
-                            </button>
-                          </div>
-                        </div>
-                        {events
-                          .filter(
-                            (e) =>
-                              e.kind === "status" &&
-                              e.habit === r.id &&
-                              e.day === day &&
-                              ((e.payload as { slot?: string }).slot || "") ===
-                                r.slot,
-                          )
-                          .map((e) => {
-                            const p = e.payload as {
-                              note: string;
-                              status: string;
-                            };
-                            return (
-                              <div key={e.seq} className="bubble outgoing">
-                                {p.note || p.status}
-                                {(e.payload as { actualTime?: string })
-                                  .actualTime
-                                  ? " · Recorded for " +
-                                    displayTime(
-                                      (e.payload as { actualTime: string })
-                                        .actualTime,
-                                    )
-                                  : ""}
-                                <small>
-                                  {indiaTime(new Date(e.created))}{" "}
-                                  <CheckCheck size={14} />
-                                </small>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    ))}
-                    {chatHelp && <div className="bubble">{chatHelp}</div>}
-                  </div>
                   <form className="chatcompose" onSubmit={send}>
                     <input
                       aria-label="Check-in message"
-                      placeholder="Write a check-in…"
+                      placeholder="e.g. Finished my walk"
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       maxLength={1000}
+                      disabled={day > today}
                     />
                     <MicButton onText={setMessage} notice={setToast} />
                     <button
                       className="send"
-                      disabled={!message.trim() || busy}
+                      disabled={!message.trim() || busy || day > today}
                       aria-label="Send check-in"
                     >
                       <Send size={18} />
                     </button>
                   </form>
-                </section>
+                  {chatHelp && (
+                    <p className="check-in-feedback" role="status">
+                      {chatHelp}
+                    </p>
+                  )}
+                </CheckInFeed>
                 <details className="card assistant">
                   <summary className="assistant-head">
                     <span className="spark">

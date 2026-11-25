@@ -92,7 +92,6 @@ nav button,
 .modalactions,
 .hint,
 footer span,
-.bubble small,
 .composer-bar,
 nav button {
   gap: 8px;
@@ -463,53 +462,6 @@ h3 {
 .chatcompose {
   padding: 16px 20px;
 }
-.chathead input {
-  width: auto;
-}
-.chatbody {
-  max-height: 60vh;
-  min-height: 0;
-  overflow: auto;
-  background-color: #edf2e9;
-  background-image: radial-gradient(#91a38a33 1px, transparent 1px);
-  background-size: 13px 13px;
-  padding: 18px;
-}
-.datetag {
-  display: table;
-  margin: 0 auto 16px;
-  background: #fff;
-  border-radius: 20px;
-  padding: 5px 13px;
-  font-size: 0.8rem;
-}
-.bubble {
-  background: white;
-  border: 1px solid #dae2d7;
-  padding: 12px 16px;
-  border-radius: 3px 14px 14px 14px;
-  max-width: 85%;
-  width: fit-content;
-  margin: 10px 0;
-}
-.bubble small {
-  font-size: 0.77rem;
-  gap: 5px;
-  color: var(--muted);
-}
-.bubble p {
-  margin: 5px 0 9px;
-}
-.outgoing {
-  background: #d9eccf;
-  margin-left: auto;
-  border-radius: 13px 3px 13px 13px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.outgoing small {
-  justify-content: end;
-}
 .choices {
   display: flex;
   flex-wrap: wrap;
@@ -710,8 +662,7 @@ dialog:modal {
     padding: 0;
   }
   .chathead,
-  .chatcompose,
-  .chatbody {
+  .chatcompose {
     padding: 12px;
   }
   footer {
@@ -1125,7 +1076,7 @@ footer {
   color: var(--forest);
   background: #eaf1e5;
 }
-.planner-summary a {
+.planner-summary a:not(.phone-label) {
   display: inline-flex;
   gap: 6px;
   align-items: center;
@@ -1144,9 +1095,6 @@ footer {
 }
 .planner-side .chat h2 {
   font-size: 1.65rem;
-}
-.planner-side .chatbody {
-  max-height: 420px;
 }
 .assistant summary {
   cursor: pointer;
@@ -1333,7 +1281,7 @@ footer {
     gap: 4px;
     font-size: 0.89rem;
   }
-  .planner-summary a {
+  .planner-summary a:not(.desktop-label) {
     min-height: 44px;
     padding: 0 4px;
     text-decoration-thickness: 1px;
@@ -1381,7 +1329,7 @@ footer {
     font-size: 1.05rem;
     letter-spacing: 0;
   }
-  .schedule[data-list-view="all"] .schedule-head,
+  .schedule[data-list-view="all"] .week-controls,
   .schedule[data-list-view="all"] .week {
     display: none;
   }
@@ -1453,9 +1401,6 @@ footer {
     background: var(--forest);
     color: #fff;
     border-color: var(--forest);
-  }
-  .planner-side .chatbody {
-    max-height: 42dvh;
   }
   .chatcompose {
     gap: 6px;
@@ -1561,5 +1506,197 @@ footer {
   }
   .header-tools svg {
     display: none;
+  }
+}
+
+.check-in-feed {
+  overflow: visible;
+}
+.check-in-feed .chathead,
+.due-check-in-top,
+.recorded-check-in-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.check-in-feed .chathead {
+  border-bottom: 1px solid var(--line);
+  position: relative;
+}
+.check-in-feed .chathead small {
+  display: block;
+  margin-top: 3px;
+}
+.check-in-sound > summary {
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  background: #edf2e9;
+  color: var(--forest);
+  list-style: none;
+}
+.check-in-sound > summary::-webkit-details-marker {
+  display: none;
+}
+.check-in-sound .sound-settings {
+  position: absolute;
+  inset: calc(100% - 2px) 10px auto auto;
+  width: min(280px, calc(100% - 20px));
+  z-index: 2;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: white;
+  box-shadow: 0 8px 24px #122a2024;
+}
+.check-in-empty,
+.check-in-pending,
+.check-in-feedback {
+  margin: 10px 14px 0;
+}
+.check-in-empty,
+.check-in-feedback {
+  color: var(--muted);
+  font-size: 0.91rem;
+}
+.due-check-in {
+  border-radius: 10px;
+  border: 1px solid #e6ded1;
+  padding: 8px 10px 10px;
+  background: #fbf7ef;
+  overflow-wrap: anywhere;
+}
+.due-check-in-top small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #79532a;
+  font-size: 0.83rem;
+}
+.due-check-in-top .iconbtn {
+  flex: 0 0 44px;
+  height: 44px;
+}
+.check-in-actions {
+  display: flex;
+  gap: 8px;
+}
+.check-in-actions button {
+  min-height: 44px;
+  padding-inline: 14px;
+}
+.check-in-more > summary,
+.check-in-history > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  color: var(--forest);
+  cursor: pointer;
+  font-weight: 650;
+  list-style: none;
+}
+.check-in-more > summary::before,
+.check-in-history > summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border: solid currentColor;
+  border-width: 1.5px 1.5px 0 0;
+  transform: rotate(45deg);
+}
+.check-in-more[open] > summary::before,
+.check-in-history[open] > summary::before {
+  transform: rotate(135deg);
+}
+.check-in-more > .due-check-in + .due-check-in {
+  margin-top: 8px;
+}
+.check-in-history {
+  padding: 0 14px;
+  border-top: 1px solid var(--line);
+}
+.check-in-history summary span {
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #edf2e9;
+}
+.check-in-history ul {
+  max-height: 36dvh;
+  overflow: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 5px;
+}
+.check-in-history li {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.check-in-history li small {
+  color: var(--muted);
+}
+.check-in-history li p {
+  margin: 4px 0;
+  white-space: pre-wrap;
+}
+.check-in-history .choices {
+  margin-top: 6px;
+}
+.check-in-feedback {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+.check-in-feed .chatcompose {
+  padding: 10px 14px;
+}
+
+@media (max-width: 700px) {
+  :root {
+    font-size: 15px;
+  }
+  .planner-head > div {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .planner-head > .primary {
+    width: 100%;
+    min-height: 44px;
+    font-size: 0.95rem;
+  }
+  .columns .planner-side {
+    display: contents;
+  }
+  .columns .check-in-feed {
+    grid-row: 1;
+  }
+  .columns .schedule {
+    grid-row: 2;
+    scroll-margin-top: 10px;
+  }
+  .columns .assistant {
+    grid-row: 3;
+  }
+  .planner-summary a.desktop-label {
+    display: none;
+  }
+  .planner-summary a.phone-label {
+    display: inline-flex;
+    align-items: center;
+  }
+  .check-in-feed .chathead {
+    padding: 6px 12px;
+  }
+  .chatcompose input,
+  .fields input,
+  .fields select,
+  .recover-journal input[type="password"] {
+    font-size: 16px;
   }
 }
