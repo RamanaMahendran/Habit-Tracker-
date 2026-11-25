@@ -36,6 +36,7 @@ import {
   CloudCheck,
   KeyRound,
   RefreshCw,
+  type LucideIcon,
   NotebookPen,
 } from "lucide-react";
 import {
@@ -77,10 +78,10 @@ import { workbook, saveFile, calendar } from "@/lib/downloads";
 import { JournalAccess } from "@/components/journal-access";
 import { journalFetch, onJournalSwitch } from "@/lib/journal-key";
 
-const tabs = [
+const tabs: { name: string; shortName?: string; icon: LucideIcon }[] = [
   { name: "Planner", icon: CalendarDays },
   { name: "Analytics", icon: ChartNoAxesColumnIncreasing },
-  { name: "Knowledge Book", icon: BookOpen },
+  { name: "Knowledge Book", shortName: "Guide", icon: BookOpen },
 ];
 const icons: Record<string, typeof Leaf> = {
   Health: HeartPulse,
@@ -281,7 +282,7 @@ function Modal({
         if (e.target === ref.current) close();
       }}
     >
-      <div className="row">
+      <div className="row dialog-heading">
         <h2>{title}</h2>
         <button className="iconbtn" onClick={close} aria-label="Close dialog">
           <X />
@@ -935,6 +936,7 @@ export default function App() {
     };
   }, [checkUpdate]);
   const nav = (n: string) => {
+    if (n !== tab) window.scrollTo(0, 0);
     setTab(n);
     setDay(today);
     setChatHelp("");
@@ -944,6 +946,11 @@ export default function App() {
       {Array.from({ length: 7 }, (_, i) => moveDay(monday, i)).map((d) => (
         <button
           key={d}
+          aria-label={displayDay(d, {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+          })}
           aria-pressed={day === d}
           className={day === d ? "selected" : ""}
           onClick={() => setDay(d)}
@@ -991,45 +998,67 @@ export default function App() {
             Habit Grove
           </button>
           <nav aria-label="Main views">
-            {tabs.map(({ name, icon: I }) => (
+            {tabs.map(({ name, shortName, icon: I }) => (
               <button
                 key={name}
+                aria-label={name}
                 aria-current={tab === name ? "page" : undefined}
                 className={tab === name ? "active" : ""}
                 onClick={() => nav(name)}
               >
                 <I size={17} />
-                {name}
+                <span className={shortName ? "desktop-label" : undefined}>
+                  {name}
+                </span>
+                {shortName && <span className="phone-label">{shortName}</span>}
               </button>
             ))}
           </nav>
           <div className="header-tools">
-            <button onClick={() => setAccess(true)}>
+            <button aria-label="Journal access" onClick={() => setAccess(true)}>
               <KeyRound size={15} />
-              Journal access
+              <span className="desktop-label">Journal access</span>
+              <span className="phone-label">Journal</span>
             </button>
             <button
+              aria-label={available ? "Update available" : "App updates"}
               onClick={() => {
                 setUpdates(true);
                 checkUpdate();
               }}
             >
               <RefreshCw size={15} />
-              {available ? "Update available" : "App updates"}
+              <span className="desktop-label">
+                {available ? "Update available" : "App updates"}
+              </span>
+              <span className="phone-label">
+                {available ? "Update" : "Updates"}
+              </span>
             </button>
           </div>
         </div>
       </header>
       <main>
-        <div className="page-head">
+        <div
+          className={"page-head" + (tab === "Planner" ? " planner-head" : "")}
+        >
           <div>
             <div className="eyebrow">
               <span className="date-line" />
-              {displayDay(today, {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              })}
+              <span className="desktop-label">
+                {displayDay(today, {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })}
+              </span>
+              <span className="phone-label">
+                {displayDay(tab === "Planner" ? day : today, {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                })}
+              </span>
             </div>
             <h1>
               {tab === "Planner"
@@ -1071,8 +1100,27 @@ export default function App() {
               </a>
             </div>
             <div className="columns">
-              <section className="card schedule">
-                <div className="row">
+              <section
+                className="card schedule"
+                data-list-view={view === "All habits" ? "all" : "scheduled"}
+                aria-label="Habit schedule"
+              >
+                <div
+                  className="phone-list-switch"
+                  role="group"
+                  aria-label="Habit list"
+                >
+                  {["Scheduled", "All habits"].map((mode) => (
+                    <button
+                      key={mode}
+                      aria-pressed={view === mode}
+                      onClick={() => setView(mode)}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+                <div className="row schedule-head">
                   <div>
                     {iconTitle(CalendarDays, "Schedule")}
                     <h2>My habits</h2>
@@ -1104,7 +1152,10 @@ export default function App() {
                 {view === "Scheduled" ? (
                   rows.length ? (
                     rows.map((r) => (
-                      <div className="habitrow" key={r.id + r.slot}>
+                      <div
+                        className="habitrow scheduled-habit"
+                        key={r.id + r.slot}
+                      >
                         <button
                           aria-label={
                             (r.status === "Done" ? "Reopen " : "Complete ") +
@@ -1123,7 +1174,9 @@ export default function App() {
                             mark(r, r.status === "Done" ? "Pending" : "Done")
                           }
                         >
-                          {r.status === "Done" && <Check size={15} />}
+                          <span className="check-mark">
+                            {r.status === "Done" && <Check size={15} />}
+                          </span>
                         </button>
                         <Badge cat={r.category} />
                         <div className="stretch">
@@ -1528,29 +1581,37 @@ export default function App() {
               {iconTitle(NotebookPen, "Activity log")}
               <h2>Habit history</h2>
               <div className="scrolltable">
-                <table>
-                  <thead>
-                    <tr>
+                <table role="table">
+                  <thead role="rowgroup">
+                    <tr role="row">
                       {["Date", "Habit", "Category", "Reminder", "Status"].map(
                         (h) => (
-                          <th key={h}>{h}</th>
+                          <th role="columnheader" key={h}>
+                            {h}
+                          </th>
                         ),
                       )}
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody role="rowgroup">
                     {history.slice(0, limit).map((r) => (
-                      <tr key={r.id + r.day + r.slot}>
-                        <td>{r.day}</td>
-                        <td>{r.title}</td>
-                        <td>{r.category}</td>
-                        <td>
+                      <tr role="row" key={r.id + r.day + r.slot}>
+                        <td role="cell" className="log-date">
+                          {r.day}
+                        </td>
+                        <td role="cell" className="log-title">
+                          {r.title}
+                        </td>
+                        <td role="cell" className="log-category">
+                          {r.category}
+                        </td>
+                        <td role="cell" className="log-time">
                           {r.outsideDay ? "Outside today" : displayTime(r.time)}
                           {r.actualTime && r.rolling && (
                             <small> · Actual {displayTime(r.actualTime)}</small>
                           )}
                         </td>
-                        <td>
+                        <td role="cell" className="log-status">
                           <span className={"pill " + r.status.toLowerCase()}>
                             {r.status === "Pending" && r.day < today
                               ? "Unrecorded"
