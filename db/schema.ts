@@ -23,3 +23,18 @@ export const journal = sqliteTable(
     index("journal_habit").on(t.owner, t.habit, t.seq),
   ],
 );
+
+export const reminderDevices = sqliteTable("reminder_devices", {
+  id: text().primaryKey(),
+  owner: text().notNull(),
+  endpoint: text().notNull(),
+  enabledAt: integer().notNull(),
+});
+export const reminderReceipts = sqliteTable(
+  "reminder_receipts",
+  {
+    id: text().primaryKey(),
+    created: integer().notNull(),
+  },
+  (t) => [index("reminder_receipt_age").on(t.created)],
+);

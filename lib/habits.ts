@@ -1,4 +1,4 @@
-import { slotTimes, parseInterval, type InDay } from "./interval";
+import { slotTimes, parseInterval, minutes, type InDay } from "./interval";
 export const categories = [
   "Wellness",
   "Learning",
@@ -16,16 +16,30 @@ export type Habit = {
   repeat: string;
   archived?: boolean;
   inDay?: InDay;
+  rolling?: boolean;
+};
+export type CheckIn = {
+  status: string;
+  note: string;
+  slot?: string;
+  actualTime?: string;
 };
 export type Entry = {
   seq: number;
   habit: string;
   kind: "plan" | "status";
   day: string;
-  payload: Habit | { status: string; note: string; slot?: string };
+  payload: Habit | CheckIn;
   created: string;
 };
-export type Row = Habit & { status: string; day: string; slot: string };
+export type Row = Habit & {
+  status: string;
+  day: string;
+  slot: string;
+  actualTime?: string;
+  next: boolean;
+  outsideDay: boolean;
+};
 export const indiaDay = (now = new Date()) =>
   new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata" }).format(now);
 export const indiaTime = (now = new Date()) =>
@@ -61,16 +75,68 @@ export function scheduled(h: Habit, day: string) {
     (h.repeat === "Once" && h.start === day)
   );
 }
+export function rowsForHabit(
+  h: Habit,
+  day: string,
+  marks: Map<string, CheckIn>,
+  previousActual?: string,
+): Row[] {
+  if (!scheduled(h, day)) return [];
+  const rolling = Boolean(h.rolling && h.inDay);
+  const step = (h.inDay?.hours ?? 0) * 60;
+  let nextDue = h.time ? minutes(h.time) : 0;
+  if (rolling && previousActual)
+    nextDue = Math.max(nextDue, minutes(previousActual) + step - 1440);
+  let pendingSeen = false;
+  return slotTimes(h.time, h.inDay).map((nominal, i) => {
+    const slot = i === 0 ? "" : nominal;
+    const mark = marks.get(slot);
+    const status = mark?.status ?? "Pending";
+    const outsideDay = rolling && nextDue >= 1440 && status === "Pending";
+    const next =
+      status === "Pending" && !outsideDay && (!rolling || !pendingSeen);
+    const time = rolling
+      ? nextDue >= 1440
+        ? ""
+        : String(Math.floor(nextDue / 60)).padStart(2, "0") +
+          ":" +
+          String(nextDue % 60).padStart(2, "0")
+      : nominal;
+    if (status === "Pending") pendingSeen = true;
+    if (rolling && status === "Done" && mark?.actualTime)
+      nextDue = minutes(mark.actualTime) + step;
+    else if (status !== "Skipped" || !rolling) nextDue += step;
+    return {
+      ...h,
+      time,
+      slot,
+      day,
+      status,
+      next,
+      outsideDay,
+      actualTime: mark?.actualTime,
+    };
+  });
+}
 export function indexJournal(entries: Entry[]) {
-  const plans = new Map<string, Entry[]>(),
-    marks = new Map<string, string>();
+  const plans = new Map<string, Entry[]>();
+  const byDay = new Map<string, Map<string, CheckIn>>();
   for (const e of entries) {
     if (e.kind === "plan") {
       if (!plans.has(e.habit)) plans.set(e.habit, []);
       plans.get(e.habit)!.push(e);
     } else {
-      const mark = e.payload as { status: string; slot?: string };
-      marks.set(e.habit + e.day + (mark.slot || ""), mark.status);
+      const key = e.habit + e.day,
+        mark = e.payload as CheckIn;
+      if (!byDay.has(key)) byDay.set(key, new Map());
+      const actualTime =
+        mark.status === "Done"
+          ? mark.actualTime ||
+            (indiaDay(new Date(e.created)) === e.day
+              ? indiaTime(new Date(e.created))
+              : undefined)
+          : undefined;
+      byDay.get(key)!.set(mark.slot || "", { ...mark, actualTime });
     }
   }
   const rows = (day: string): Row[] =>
@@ -79,18 +145,20 @@ export function indexJournal(entries: Entry[]) {
         const event = versions.findLast((v) => v.day <= day);
         if (!event) return [];
         const h = event.payload as Habit;
-        return scheduled(h, day)
-          ? slotTimes(h.time, h.inDay).map((time, i) => {
-              const slot = i === 0 ? "" : time;
-              return {
-                ...h,
-                time,
-                day,
-                slot,
-                status: marks.get(h.id + day + slot) || "Pending",
-              };
-            })
-          : [];
+        const yesterday = byDay.get(h.id + moveDay(day, -1));
+        const previousActual = yesterday
+          ? Array.from(yesterday.values())
+              .filter((v) => v.status === "Done" && v.actualTime)
+              .map((v) => v.actualTime!)
+              .sort()
+              .at(-1)
+          : undefined;
+        return rowsForHabit(
+          h,
+          day,
+          byDay.get(h.id + day) || new Map(),
+          previousActual,
+        );
       })
       .sort(
         (a, b) =>

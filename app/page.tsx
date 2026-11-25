@@ -54,6 +54,12 @@ import {
   type Entry,
 } from "@/lib/habits";
 import { slotTimes, messageTime } from "@/lib/interval";
+import {
+  SoundSettings,
+  ring,
+  soundEnabled,
+  useAudioUnlock,
+} from "@/components/reminder-sound";
 import release from "../public/version.json";
 import { workbook, saveFile, calendar } from "@/lib/downloads";
 
@@ -346,13 +352,11 @@ function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
               change({
                 ...h,
                 time: h.time || "08:00",
-                inDay: {
-                  hours: 2,
-                  until: h.time && h.time > "16:00" ? "23:59" : "18:00",
-                },
+                inDay: { hours: 2, count: 5 },
+                rolling: true,
               });
             else {
-              const { inDay, ...single } = h;
+              const { inDay, rolling, ...single } = h;
               change(single);
             }
           }}
@@ -361,6 +365,28 @@ function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
       </label>
       {rule && (
         <>
+          <label>
+            Calculate next reminder
+            <select
+              value={h.rolling ? "actual" : "fixed"}
+              onChange={(e) => {
+                const rolling = e.target.value === "actual";
+                change({
+                  ...h,
+                  rolling,
+                  inDay: rolling
+                    ? {
+                        hours: rule.hours,
+                        count: "count" in rule ? rule.count : 5,
+                      }
+                    : rule,
+                });
+              }}
+            >
+              <option value="fixed">From scheduled times</option>
+              <option value="actual">From last actual check-in</option>
+            </select>
+          </label>
           <div className="pair">
             <label>
               Interval (hours)
@@ -382,6 +408,7 @@ function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
             <label>
               Stop repeating
               <select
+                disabled={!!h.rolling}
                 value={"until" in rule ? "until" : "count"}
                 onChange={(e) =>
                   change({
@@ -439,16 +466,24 @@ function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
           >
             {times.length
               ? times.length +
-                " check-ins · " +
+                (h.rolling ? " planned check-ins · " : " check-ins · ") +
                 times.map(displayTime).join(", ")
               : "Choose an interval and times that fit at least two check-ins before midnight."}
           </p>
+          {h.rolling && (
+            <small>
+              Only the next check-in rings. Recording the actual time moves the
+              remaining reminders. Check-ins that would fall after midnight are
+              omitted for that day.
+            </small>
+          )}
         </>
       )}
     </div>
   );
 }
 export default function App() {
+  useAudioUnlock();
   const {
     events,
     refresh,
@@ -481,15 +516,19 @@ export default function App() {
     [period, setPeriod] = useState("7"),
     [limit, setLimit] = useState(50),
     [exporting, setExporting] = useState(false);
+  const [record, setRecord] = useState<{
+    r: Row;
+    time: string;
+    note: string;
+  } | null>(null);
+  const [recordError, setRecordError] = useState("");
   const today = indiaDay(now),
     minute = indiaTime(now),
     rows = journal.rows(day),
     done = rows.filter((r) => r.status === "Done").length;
   const monday = moveDay(day, -((dateObj(day).getUTCDay() + 6) % 7)),
     todayRows = journal.rows(today),
-    due = todayRows.filter(
-      (r) => r.time && r.time <= minute && r.status === "Pending",
-    );
+    due = todayRows.filter((r) => r.next && r.time && r.time <= minute);
   const lastToast = useRef(new Set<string>());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 15000);
@@ -505,10 +544,12 @@ export default function App() {
       const key = r.id + today + r.time;
       if (!lastToast.current.has(key)) {
         lastToast.current.add(key);
+        if (soundEnabled() && document.visibilityState === "visible") ring();
         setToast("Check-in due · " + r.title + " · " + displayTime(r.time));
         if (
           typeof Notification !== "undefined" &&
           Notification.permission === "granted" &&
+          localStorage.getItem("grove.push") !== "on" &&
           "serviceWorker" in navigator
         )
           navigator.serviceWorker.ready
@@ -516,6 +557,8 @@ export default function App() {
               reg.showNotification("Habit Grove check-in", {
                 body: r.title + " · " + displayTime(r.time),
                 tag: key,
+                silent:
+                  !soundEnabled() || document.visibilityState === "visible",
                 icon: "/icon-192.png",
               }),
             )
@@ -548,7 +591,16 @@ export default function App() {
       payload: h,
     };
   }
-  async function mark(r: Row, status: string, note = "") {
+  async function mark(r: Row, status: string, note = "", actualTime?: string) {
+    if (r.rolling && status === "Done" && actualTime === undefined) {
+      setRecordError("");
+      setRecord({
+        r,
+        time: r.actualTime || (r.day === indiaDay() ? indiaTime() : r.time),
+        note,
+      });
+      return false;
+    }
     if (
       await save([
         {
@@ -556,7 +608,7 @@ export default function App() {
           habit: r.id,
           kind: "status",
           day: r.day,
-          payload: { status, note, slot: r.slot },
+          payload: { status, note, slot: r.slot, actualTime },
         },
       ])
     ) {
@@ -592,7 +644,7 @@ export default function App() {
       ? "Skipped"
       : /\b(undo|reopen|pending)\b/i.test(s)
         ? "Pending"
-        : /\b(done|completed|finished|did|walked|read|drank|wrote|practised|practiced|studied)\b/i.test(
+        : /\b(done|completed|finished|did|took|taken|walked|read|drank|wrote|practised|practiced|studied)\b/i.test(
               s,
             )
           ? "Done"
@@ -646,7 +698,11 @@ export default function App() {
     const terms = tokens(s);
     const requestedTime = messageTime(s);
     const ranks = possible
-      .filter((r) => !requestedTime || r.time === requestedTime)
+      .filter((r) =>
+        r.rolling && status === "Done"
+          ? r.next
+          : !requestedTime || r.time === requestedTime,
+      )
       .map((r) => ({
         r,
         n: tokens(r.title).filter((t) => terms.includes(t)).length,
@@ -662,6 +718,16 @@ export default function App() {
       setChatHelp(
         "Which check-in did you mean? Include its name and time, for example “Finished my walk at 10 am”, or tap its button.",
       );
+      return;
+    }
+    if (pick.rolling && status === "Done") {
+      setRecordError("");
+      setRecord({
+        r: pick,
+        time:
+          requestedTime || (targetDay === indiaDay() ? indiaTime() : pick.time),
+        note: s,
+      });
       return;
     }
     if (await mark(pick, status, s)) {
@@ -929,7 +995,11 @@ export default function App() {
                             r.title +
                             (r.inDay ? " at " + displayTime(r.time) : "")
                           }
-                          disabled={busy || day > today}
+                          disabled={
+                            busy ||
+                            day > today ||
+                            (!!r.rolling && r.status === "Pending" && !r.next)
+                          }
                           className={
                             "check " + (r.status === "Done" ? "checked" : "")
                           }
@@ -943,7 +1013,19 @@ export default function App() {
                         <div className="stretch">
                           <b>{r.title}</b>
                           <small>
-                            {displayTime(r.time)} · {r.repeat}
+                            {r.outsideDay
+                              ? "Outside today"
+                              : displayTime(r.time)}{" "}
+                            · {r.repeat}
+                            {r.actualTime && r.rolling
+                              ? " · Recorded at " + displayTime(r.actualTime)
+                              : ""}
+                            {r.rolling &&
+                            r.status === "Pending" &&
+                            !r.next &&
+                            !r.outsideDay
+                              ? " · Estimated"
+                              : ""}
                             {r.status === "Skipped" ? " · Skipped" : ""}
                           </small>
                         </div>
@@ -1075,31 +1157,7 @@ export default function App() {
                 />
               </div>
             </div>
-            <div className="notifyline">
-              <Bell size={15} />
-              <button
-                onClick={async () => {
-                  if (typeof Notification === "undefined") {
-                    setToast(
-                      "For phone alerts, open a habit and import its calendar reminder.",
-                    );
-                    return;
-                  }
-                  try {
-                    const p = await Notification.requestPermission();
-                    setToast(
-                      p === "granted"
-                        ? "Device alerts enabled while Habit Grove is active."
-                        : "For closed-app reminders, import this habit into your calendar.",
-                    );
-                  } catch {
-                    setToast("Device alerts are unavailable in this browser.");
-                  }
-                }}
-              >
-                Enable device alerts
-              </button>
-            </div>
+            <SoundSettings />
             <div className="chatbody">
               <span className="datetag">
                 {displayDay(day, {
@@ -1119,7 +1177,17 @@ export default function App() {
                   <div className="bubble">
                     <small>
                       <Bell size={13} />{" "}
-                      {r.time ? displayTime(r.time) + " IST" : "Anytime"}
+                      {r.outsideDay
+                        ? "Outside today"
+                        : r.time
+                          ? displayTime(r.time) + " IST"
+                          : "Anytime"}
+                      {r.rolling &&
+                      !r.next &&
+                      r.status === "Pending" &&
+                      !r.outsideDay
+                        ? " · Estimated"
+                        : ""}
                       {r.day === today && r.time > minute ? " · Upcoming" : ""}
                     </small>
                     <p>
@@ -1134,7 +1202,11 @@ export default function App() {
                         )
                         .map((s) => (
                           <button
-                            disabled={busy || day > today}
+                            disabled={
+                              busy ||
+                              day > today ||
+                              (!!r.rolling && r.status === "Pending" && !r.next)
+                            }
                             key={s}
                             onClick={() => mark(r, s)}
                           >
@@ -1145,6 +1217,11 @@ export default function App() {
                                 : s}
                           </button>
                         ))}
+                      {r.rolling && r.status === "Done" && (
+                        <button onClick={() => mark(r, "Done")}>
+                          Edit actual time
+                        </button>
+                      )}
                       <button
                         onClick={() =>
                           edit(journal.current.find((h) => h.id === r.id) || r)
@@ -1168,6 +1245,13 @@ export default function App() {
                       return (
                         <div key={e.seq} className="bubble outgoing">
                           {p.note || p.status}
+                          {(e.payload as { actualTime?: string }).actualTime
+                            ? " · Recorded for " +
+                              displayTime(
+                                (e.payload as { actualTime: string })
+                                  .actualTime,
+                              )
+                            : ""}
                           <small>
                             {indiaTime(new Date(e.created))}{" "}
                             <CheckCheck size={14} />
@@ -1261,7 +1345,12 @@ export default function App() {
                         <td>{r.day}</td>
                         <td>{r.title}</td>
                         <td>{r.category}</td>
-                        <td>{displayTime(r.time)}</td>
+                        <td>
+                          {r.outsideDay ? "Outside today" : displayTime(r.time)}
+                          {r.actualTime && r.rolling && (
+                            <small> · Actual {displayTime(r.actualTime)}</small>
+                          )}
+                        </td>
                         <td>
                           <span className={"pill " + r.status.toLowerCase()}>
                             {r.status === "Pending" && r.day < today
@@ -1359,6 +1448,49 @@ export default function App() {
           )}
         </Modal>
       )}
+      {record && (
+        <Modal title="Record actual time" close={() => setRecord(null)}>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (record.r.day === indiaDay() && record.time > indiaTime()) {
+                setRecordError("Choose a time that has already passed.");
+                return;
+              }
+              const ok = await mark(record.r, "Done", record.note, record.time);
+              if (ok) {
+                setRecord(null);
+                if (record.note) setMessage("");
+              } else
+                setRecordError(
+                  "Could not save this check-in. Check the time and order, then retry.",
+                );
+            }}
+          >
+            <p className="hint">
+              {record.r.title} · {record.r.day}
+            </p>
+            <div className="fields">
+              <label>
+                Actual time · IST
+                <input
+                  type="time"
+                  value={record.time}
+                  required
+                  max={record.r.day === indiaDay() ? indiaTime() : undefined}
+                  onChange={(e) =>
+                    setRecord({ ...record, time: e.target.value })
+                  }
+                />
+              </label>
+            </div>
+            {recordError && <p role="alert">{recordError}</p>}
+            <button className="primary" disabled={busy}>
+              Save actual time
+            </button>
+          </form>
+        </Modal>
+      )}
       {draft && (
         <Modal
           title={editing ? "Edit habit" : "Add a habit"}
@@ -1368,10 +1500,10 @@ export default function App() {
             <Fields h={draft} change={setDraft} />
             <p className="hint">
               <Bell size={16} /> In-app prompts appear at the check-in time. For
-              alerts when closed, import the reminder into your phone calendar.
+              background reminders, enable sound alerts in Check-in chat.
             </p>
             <div className="modalactions">
-              {editing && draft.time && (
+              {editing && draft.time && !draft.rolling && (
                 <button
                   type="button"
                   className="secondary"

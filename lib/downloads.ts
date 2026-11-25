@@ -28,7 +28,15 @@ export function workbook(rows: Row[], events: Entry[], habits: Habit[]) {
     {
       name: "Daily activity",
       data: [
-        ["Date", "Habit", "Category", "Reminder (IST)", "Frequency", "Status"],
+        [
+          "Date",
+          "Habit",
+          "Category",
+          "Reminder (IST)",
+          "Frequency",
+          "Status",
+          "Actual time (IST)",
+        ],
         ...rows.map((r) => [
           r.day,
           r.title,
@@ -38,6 +46,7 @@ export function workbook(rows: Row[], events: Entry[], habits: Habit[]) {
           r.status === "Pending" && r.day < indiaDay()
             ? "Unrecorded"
             : r.status,
+          r.actualTime || "",
         ]),
       ],
     },

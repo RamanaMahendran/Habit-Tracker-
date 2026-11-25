@@ -1,9 +1,13 @@
+import { owner } from "@/lib/journal-owner";
 import { slotTimes } from "@/lib/interval";
 import { env } from "cloudflare:workers";
 import {
   categories,
   frequencies,
   indiaDay,
+  indiaTime,
+  type CheckIn,
+  rowsForHabit,
   scheduled,
   type Habit,
 } from "@/lib/habits";
@@ -13,20 +17,6 @@ const reply = (x: unknown, status = 200) =>
     status,
     headers: { "Cache-Control": "private, no-store" },
   });
-async function owner(req: Request) {
-  const key = req.headers.get("x-habit-journal-key");
-  if (!key || !/^[a-f0-9]{64}$/.test(key)) return null;
-  const hash = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(key),
-  );
-  return (
-    "journal:" +
-    Array.from(new Uint8Array(hash), (b) =>
-      b.toString(16).padStart(2, "0"),
-    ).join("")
-  );
-}
 // The platform identity is used only to copy records from the original release.
 function previousOwner(req: Request) {
   return req.headers.get("oai-authenticated-user-id");
@@ -145,6 +135,9 @@ export async function POST(req: Request) {
         time: h.time,
         repeat: h.repeat,
         archived: h.archived === true,
+        ...(h.rolling === true && h.inDay && "count" in h.inDay
+          ? { rolling: true }
+          : {}),
         ...(h.inDay
           ? {
               inDay:
@@ -182,7 +175,79 @@ export async function POST(req: Request) {
           { error: "That check-in time has changed. Refresh the planner." },
           409,
         );
-      data = { status: v.status, note: v.note, slot };
+      const actualTime =
+        v.status === "Done"
+          ? (v.actualTime ?? (day === today ? indiaTime() : undefined))
+          : undefined;
+      if (
+        actualTime !== undefined &&
+        (typeof actualTime !== "string" ||
+          !/^([01]\d|2[0-3]):[0-5]\d$/.test(actualTime) ||
+          (day === today && actualTime > indiaTime()))
+      )
+        return reply(
+          {
+            error:
+              "Choose the time it actually happened, up to the current time.",
+          },
+          400,
+        );
+      if (h.rolling) {
+        const latest = await env
+          .DB!.prepare(
+            "SELECT payload,created FROM habit_journal WHERE owner=? AND habit=? AND day=? AND kind='status' ORDER BY seq",
+          )
+          .bind(user, e.habit, day)
+          .all<{ payload: string; created: string }>();
+        const marks = new Map<string, CheckIn>();
+        for (const x of latest.results) {
+          const m = JSON.parse(x.payload) as CheckIn;
+          if (
+            m.status === "Done" &&
+            !m.actualTime &&
+            indiaDay(new Date(x.created)) === day
+          )
+            m.actualTime = indiaTime(new Date(x.created));
+          marks.set(m.slot || "", m);
+        }
+        const rows = rowsForHabit(h, day, marks),
+          index = rows.findIndex((r) => r.slot === slot),
+          current = rows[index];
+        if (
+          current?.status === "Pending" &&
+          !current.next &&
+          v.status !== "Pending"
+        )
+          return reply(
+            {
+              error:
+                "Record or skip the earlier check-in first. Refresh if you just logged it.",
+            },
+            409,
+          );
+        if (
+          v.status === "Done" &&
+          (!actualTime ||
+            rows.some(
+              (r, i) =>
+                r.status === "Done" &&
+                r.actualTime &&
+                (i < index
+                  ? r.actualTime > actualTime
+                  : i > index && r.actualTime < actualTime),
+            ))
+        )
+          return reply(
+            { error: "Use a time in order with the other recorded check-ins." },
+            400,
+          );
+      }
+      data = {
+        status: v.status,
+        note: v.note,
+        slot,
+        ...(actualTime ? { actualTime } : {}),
+      };
     } else return reply({ error: "Unknown change." }, 400);
     ops.push(
       env
