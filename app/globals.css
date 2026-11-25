@@ -465,6 +465,43 @@ h3 {
   color: #506354;
   font-size: 0.93rem;
 }
+.planner-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.planner-prompts button {
+  background: #f8faf5;
+  color: var(--forest);
+  border: 1px solid #ccd9c6;
+  border-radius: 14px;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+}
+.planner-dialogue {
+  overflow-y: auto;
+  max-height: 310px;
+  margin-bottom: 12px;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+}
+.planner-dialogue .planner-question {
+  margin: 6px 0 5px auto;
+  width: fit-content;
+  max-width: 92%;
+  background: #d4e3c9;
+  border-radius: 10px;
+  padding: 7px 10px;
+}
+.planner-dialogue .planner-answer {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  background: white;
+  border-radius: 10px;
+  padding: 10px;
+  margin: 3px 0 7px;
+}
 .assistant form {
   border: 1px solid #d4dfcc;
   background: white;

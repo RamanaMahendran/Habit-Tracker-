@@ -4,6 +4,7 @@ import {
   indiaDay,
   indiaTime,
   indexJournal,
+  isOverdue,
   moveDay,
   type Entry,
   type Row,
@@ -83,11 +84,7 @@ export async function dueRows(owner: string, now: Date) {
   return indexJournal(entries)
     .rows(day)
     .filter(
-      (r) =>
-        r.next &&
-        r.time &&
-        minutes(r.time) <= m &&
-        (r.rolling || m - minutes(r.time) < 30),
+      (r) => isOverdue(r, now) && (r.rolling || m - minutes(r.time) < 30),
     );
 }
 export async function deliverDevice(

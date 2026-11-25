@@ -10,6 +10,8 @@ Add a habit manually or describe it to the planning assistant. Supported schedul
 
 In Check-in chat, **Enable sound alerts** unlocks the in-app chime and registers this device for optional Web Push. Background delivery checks the private journal on the server using a GitHub Actions schedule every five minutes. GitHub or the phone can delay delivery. Browser and Android notification settings control background sound. Notification text is generic. In-app prompts appear while the tracker is active. For fixed-time calendar alerts, open a saved habit, download its calendar reminder, and import it into the device calendar. Reimport after a schedule edit and remove obsolete events from the calendar.
 
+Check-in chat asks for a status only after the scheduled time passes. Forecasts for later rolling check-ins remain in Planner. The planning assistant answers schedule and progress questions inline and can propose a routine or reschedule a named habit. Use the review button to apply a suggested change.
+
 The journal records plan versions and check-ins without automatic expiry. Analytics can export all scheduled dates, habit definitions and changes in a three-sheet XLSX workbook. Archived habits retain earlier history.
 
 ## Development and releases

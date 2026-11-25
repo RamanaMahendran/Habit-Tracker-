@@ -48,11 +48,12 @@ import {
   dateObj,
   blank,
   indexJournal,
-  draftPlan,
+  isOverdue,
   type Row,
   type Habit,
   type Entry,
 } from "@/lib/habits";
+import { answerPlan, type Reply } from "@/lib/planning-assistant";
 import { slotTimes, messageTime } from "@/lib/interval";
 import {
   SoundSettings,
@@ -509,6 +510,7 @@ export default function App() {
     [draft, setDraft] = useState<Habit | null>(null),
     [editing, setEditing] = useState(false),
     [prompt, setPrompt] = useState(""),
+    [turns, setTurns] = useState<{ question: string; reply: Reply }[]>([]),
     [proposals, setProposals] = useState<Habit[]>([]),
     [message, setMessage] = useState(""),
     [chatHelp, setChatHelp] = useState(""),
@@ -523,12 +525,17 @@ export default function App() {
   } | null>(null);
   const [recordError, setRecordError] = useState("");
   const today = indiaDay(now),
-    minute = indiaTime(now),
     rows = journal.rows(day),
+    chatRows = rows.filter((r) => r.status !== "Pending" || isOverdue(r, now)),
     done = rows.filter((r) => r.status === "Done").length;
+  const plannerEnd = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const panel = plannerEnd.current?.parentElement;
+    if (panel) panel.scrollTop = panel.scrollHeight;
+  }, [turns]);
   const monday = moveDay(day, -((dateObj(day).getUTCDay() + 6) % 7)),
     todayRows = journal.rows(today),
-    due = todayRows.filter((r) => r.next && r.time && r.time <= minute);
+    due = todayRows.filter((r) => isOverdue(r, now));
   const lastToast = useRef(new Set<string>());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 15000);
@@ -541,7 +548,7 @@ export default function App() {
   }, [toast]);
   useEffect(() => {
     for (const r of due) {
-      const key = r.id + today + r.time;
+      const key = [r.id, today, r.slot, r.time].join("|");
       if (!lastToast.current.has(key)) {
         lastToast.current.add(key);
         if (soundEnabled() && document.visibilityState === "visible") ring();
@@ -625,14 +632,26 @@ export default function App() {
     if (draft?.inDay && !slotTimes(draft.time, draft.inDay).length) return;
     if (draft && (await save([planChange(draft)]))) {
       setToast(editing ? "Habit updated" : "Added to your planner");
+      if (turns.at(-1)?.reply.edit?.id === draft.id) finishReview();
       setDraft(null);
     }
   }
-  function buildPlan(e: FormEvent) {
-    e.preventDefault();
-    const next = draftPlan(prompt, day);
-    if (next.length) setProposals(next);
-    else setToast("Describe a task, for example “Walk tomorrow at 7 am”.");
+  function askPlanner(question: string) {
+    if (!question.trim()) return;
+    const reply = answerPlan(
+      question,
+      journal,
+      day,
+      new Date(),
+      turns.at(-1)?.reply.followUp,
+    );
+    setTurns((old) => [...old.slice(-9), { question: question.trim(), reply }]);
+    setPrompt("");
+  }
+  function finishReview() {
+    setTurns((old) =>
+      old.map((turn) => ({ ...turn, reply: { text: turn.reply.text } })),
+    );
   }
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -1096,22 +1115,71 @@ export default function App() {
                     </span>
                     <h2>Planning assistant</h2>
                   </div>
-                  <p>Tell me what you want to do, by voice or text.</p>
-                  <form onSubmit={buildPlan}>
+                  <p>
+                    Ask about your day, change a reminder, or build a routine.
+                  </p>
+                  <div className="planner-prompts">
+                    {[
+                      "What’s next?",
+                      "What’s overdue?",
+                      "Show my progress this week",
+                    ].map((question) => (
+                      <button
+                        key={question}
+                        disabled={state === "Connecting"}
+                        onClick={() => askPlanner(question)}
+                      >
+                        {question}
+                      </button>
+                    ))}
+                  </div>
+                  {turns.length > 0 && (
+                    <div className="planner-dialogue" aria-live="polite">
+                      {turns.map(({ question, reply }, i) => (
+                        <div key={i}>
+                          <p className="planner-question">{question}</p>
+                          <p className="planner-answer">{reply.text}</p>
+                          {i === turns.length - 1 && reply.edit && (
+                            <button
+                              className="secondary small"
+                              onClick={() => edit(reply.edit!)}
+                            >
+                              Review change
+                            </button>
+                          )}
+                          {i === turns.length - 1 && reply.create && (
+                            <button
+                              className="secondary small"
+                              onClick={() => setProposals(reply.create!)}
+                            >
+                              Review suggested plan
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <span ref={plannerEnd} />
+                    </div>
+                  )}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      askPlanner(prompt);
+                    }}
+                  >
                     <textarea
                       aria-label="Describe your plan"
                       value={prompt}
                       maxLength={1000}
                       onChange={(e) => setPrompt(e.target.value)}
-                      placeholder="e.g. Remind me to walk every morning at 7 am"
+                      placeholder="Ask about a habit or describe a plan…"
                     />
                     <div className="composer-bar">
                       <MicButton onText={setPrompt} notice={setToast} />
                       <button
                         className="primary small"
-                        disabled={!prompt.trim()}
+                        disabled={!prompt.trim() || state === "Connecting"}
                       >
-                        Plan it <Sparkles size={14} />
+                        Send <Send size={14} />
                       </button>
                     </div>
                   </form>
@@ -1166,32 +1234,29 @@ export default function App() {
                   day: "numeric",
                 })}
               </span>
-              {rows.length === 0 && (
+              {chatRows.length === 0 && (
                 <div className="bubble">
-                  You have no habits scheduled for this day. Add one to start
-                  checking in.
+                  {rows.length
+                    ? "No overdue check-ins. Your schedule is in Planner."
+                    : "No habits scheduled for this day."}
                 </div>
               )}
-              {rows.map((r) => (
+              {chatRows.map((r) => (
                 <div key={r.id + r.slot} className="thread">
                   <div className="bubble">
                     <small>
                       <Bell size={13} />{" "}
-                      {r.outsideDay
-                        ? "Outside today"
-                        : r.time
-                          ? displayTime(r.time) + " IST"
-                          : "Anytime"}
-                      {r.rolling &&
-                      !r.next &&
-                      r.status === "Pending" &&
-                      !r.outsideDay
-                        ? " · Estimated"
-                        : ""}
-                      {r.day === today && r.time > minute ? " · Upcoming" : ""}
+                      {r.time ? displayTime(r.time) + " IST" : "Anytime"} ·{" "}
+                      {r.status === "Pending" ? "Overdue" : r.status}
                     </small>
                     <p>
-                      Did you complete <b>{r.title}</b>?
+                      {r.status === "Pending" ? (
+                        <>
+                          Did you complete <b>{r.title}</b>?
+                        </>
+                      ) : (
+                        <b>{r.title}</b>
+                      )}
                     </p>
                     <div className="choices">
                       {["Done", "Skipped", "Pending"]
@@ -1499,8 +1564,9 @@ export default function App() {
           <form onSubmit={submitDraft}>
             <Fields h={draft} change={setDraft} />
             <p className="hint">
-              <Bell size={16} /> In-app prompts appear at the check-in time. For
-              background reminders, enable sound alerts in Check-in chat.
+              <Bell size={16} /> In-app prompts appear after the check-in time
+              passes. For background reminders, enable sound alerts in Check-in
+              chat.
             </p>
             <div className="modalactions">
               {editing && draft.time && !draft.rolling && (
@@ -1552,6 +1618,7 @@ export default function App() {
               if (await save(proposals.map(planChange))) {
                 setProposals([]);
                 setPrompt("");
+                finishReview();
                 setToast("Plan added to your habits");
               }
             }}

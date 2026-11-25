@@ -40,6 +40,16 @@ export type Row = Habit & {
   next: boolean;
   outsideDay: boolean;
 };
+export function isOverdue(row: Row, now: Date): boolean {
+  return (
+    row.status === "Pending" &&
+    row.next &&
+    !row.outsideDay &&
+    !!row.time &&
+    now.getTime() > Date.parse(row.day + "T" + row.time + ":00+05:30")
+  );
+}
+
 export const indiaDay = (now = new Date()) =>
   new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Kolkata" }).format(now);
 export const indiaTime = (now = new Date()) =>
