@@ -1,3 +1,4 @@
+import { classification, topics } from "@/lib/categories";
 import { owner } from "@/lib/journal-owner";
 import { slotTimes } from "@/lib/interval";
 import { env } from "cloudflare:workers";
@@ -115,6 +116,10 @@ export async function POST(req: Request) {
             typeof h.inDay !== "object" ||
             !slotTimes(h.time, h.inDay).length)) ||
         !categories.includes(h.category) ||
+        (h.autoCategory !== undefined && typeof h.autoCategory !== "boolean") ||
+        (h.subcategory !== undefined &&
+          h.subcategory !== "General" &&
+          !topics(h.category).some((t) => t.name === h.subcategory)) ||
         !frequencies.includes(h.repeat) ||
         typeof h.time !== "string" ||
         (h.time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(h.time))
@@ -130,7 +135,8 @@ export async function POST(req: Request) {
       data = {
         id: e.habit,
         title: h.title.trim(),
-        category: h.category,
+        ...classification(h),
+        autoCategory: h.autoCategory === true,
         start: h.start,
         time: h.time,
         repeat: h.repeat,

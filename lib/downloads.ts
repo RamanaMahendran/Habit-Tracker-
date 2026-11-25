@@ -1,3 +1,4 @@
+import { classification } from "./categories";
 import { slotTimes } from "./interval";
 import { zipSync, strToU8 } from "fflate";
 import {
@@ -36,6 +37,7 @@ export function workbook(rows: Row[], events: Entry[], habits: Habit[]) {
           "Frequency",
           "Status",
           "Actual time (IST)",
+          "Subcategory",
         ],
         ...rows.map((r) => [
           r.day,
@@ -47,6 +49,8 @@ export function workbook(rows: Row[], events: Entry[], habits: Habit[]) {
             ? "Unrecorded"
             : r.status,
           r.actualTime || "",
+          r.subcategory ||
+            classification({ ...r, autoCategory: false }).subcategory,
         ]),
       ],
     },
@@ -61,6 +65,7 @@ export function workbook(rows: Row[], events: Entry[], habits: Habit[]) {
           "Frequency",
           "Archived",
           "Check-in times (IST)",
+          "Subcategory",
         ],
         ...habits.map((h) => [
           h.title,
@@ -70,6 +75,7 @@ export function workbook(rows: Row[], events: Entry[], habits: Habit[]) {
           h.repeat,
           h.archived ? "Yes" : "No",
           slotTimes(h.time, h.inDay).join(", "),
+          classification(h).subcategory,
         ]),
       ],
     },

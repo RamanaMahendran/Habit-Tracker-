@@ -1,3 +1,4 @@
+import { suggestCategory } from "./categories";
 import {
   dateObj,
   displayDay,
@@ -177,6 +178,18 @@ export function answerPlan(
     /^(what|whats|when|how|which|why|do i|did i|am i|is |are |can i|can you (show|tell|help))\b/.test(
       q,
     );
+  if (
+    /\b(categor(?:y|ies)|categorise|categorize|classify)\b/.test(q) &&
+    (question || /^(categorise|categorize|classify)\b/.test(q))
+  ) {
+    const match = suggestCategory(raw, messageTime(raw));
+    return {
+      text:
+        match.category === "Personal" && match.subcategory === "General"
+          ? "I couldn’t identify a specific topic. Open Knowledge Book to browse examples, or include the task name and reminder time."
+          : `Suggested category: ${match.category} → ${match.subcategory}. Open Knowledge Book for examples.`,
+    };
+  }
   if (/^(cancel|never mind|nevermind)$/.test(q))
     return { text: "Okay. What else would you like to plan?" };
   if (

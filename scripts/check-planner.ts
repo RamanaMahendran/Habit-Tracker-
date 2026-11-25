@@ -1,3 +1,5 @@
+import { classification, suggestCategory, timeBand } from "../lib/categories";
+import { progressStatus, timingNote } from "../components/daily-progress";
 import assert from "node:assert/strict";
 import { indexJournal, isOverdue, type Entry, type Habit } from "../lib/habits";
 import { answerPlan } from "../lib/planning-assistant";
@@ -98,4 +100,67 @@ assert.equal(
   "Read 2 pages",
 );
 assert.equal(ask("Hello").create, undefined);
-console.log("Planner and reminder checks passed.");
+assert.deepEqual(suggestCategory("Take BP medicine after lunch", "12:30"), {
+  category: "Health",
+  subcategory: "Medication",
+});
+assert.equal(
+  suggestCategory("Check blood pressure", "08:00").subcategory,
+  "Measurements",
+);
+assert.equal(
+  ask("What category is BP medicine?").text.includes("Health → Medication"),
+  true,
+);
+assert.equal(
+  classification({ ...walk, title: "Take BP medicine", category: "Personal" })
+    .category,
+  "Personal",
+);
+assert.deepEqual(
+  [
+    "04:59",
+    "05:00",
+    "11:59",
+    "12:00",
+    "16:59",
+    "17:00",
+    "20:59",
+    "21:00",
+    "",
+  ].map(timeBand),
+  [
+    "Night",
+    "Morning",
+    "Morning",
+    "Afternoon",
+    "Afternoon",
+    "Evening",
+    "Evening",
+    "Night",
+    "Anytime",
+  ],
+);
+assert.equal(suggestCategory("Review my list", "19:00").subcategory, "Evening");
+const states = journal
+  .rows(day)
+  .filter((r) => r.id === flower.id)
+  .map((r) => progressStatus(r, at("11:31"), day));
+assert.match(
+  timingNote(
+    journal.rows(day).find((r) => r.id === flower.id && r.status === "Done")!,
+  ),
+  /90 min after reminder/,
+);
+assert.deepEqual(states, [
+  "Done",
+  "Overdue",
+  "Estimated",
+  "Estimated",
+  "Estimated",
+]);
+assert.equal(
+  ask("Remind me to take BP tablets at 8 am").create?.[0].subcategory,
+  "Medication",
+);
+console.log("Planner, categories, daily dashboard and reminder checks passed.");

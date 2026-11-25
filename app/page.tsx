@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   Sprout,
+  HeartPulse,
   CalendarDays,
   MessageCircle,
   ChartNoAxesColumnIncreasing,
@@ -54,6 +55,9 @@ import {
   type Entry,
 } from "@/lib/habits";
 import { answerPlan, type Reply } from "@/lib/planning-assistant";
+import { KnowledgeBook } from "@/components/knowledge-book";
+import { DailyProgress } from "@/components/daily-progress";
+import { classification, topics } from "@/lib/categories";
 import { slotTimes, messageTime } from "@/lib/interval";
 import {
   SoundSettings,
@@ -71,6 +75,7 @@ const tabs = [
   { name: "Planner", icon: CalendarDays },
   { name: "Check-in chat", icon: MessageCircle },
   { name: "Analytics", icon: ChartNoAxesColumnIncreasing },
+  { name: "Knowledge Book", icon: BookOpen },
 ];
 const seeds = [
   { title: "Take a morning walk", category: "Wellness", time: "07:00" },
@@ -78,6 +83,8 @@ const seeds = [
   { title: "Write a journal entry", category: "Mindfulness", time: "21:00" },
 ];
 const icons: Record<string, typeof Leaf> = {
+  Health: HeartPulse,
+  Routines: Clock,
   Wellness: Footprints,
   Learning: BookOpen,
   Mindfulness: Flower2,
@@ -285,6 +292,8 @@ function Modal({
   );
 }
 function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
+  const selected = classification(h);
+  const options = topics(selected.category);
   const rule = h.inDay;
   const times = slotTimes(h.time, rule);
   return (
@@ -304,9 +313,23 @@ function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
         <label>
           Category
           <select
-            value={h.category}
-            onChange={(e) => change({ ...h, category: e.target.value })}
+            value={h.autoCategory ? "auto" : h.category}
+            onChange={(e) =>
+              change({
+                ...h,
+                autoCategory: e.target.value === "auto",
+                category:
+                  e.target.value === "auto"
+                    ? selected.category
+                    : e.target.value,
+                subcategory: undefined,
+              })
+            }
           >
+            <option value="auto">
+              Automatic ·{" "}
+              {h.autoCategory ? selected.category : "use task and time"}
+            </option>
             {categories.map((x) => (
               <option key={x}>{x}</option>
             ))}
@@ -324,6 +347,29 @@ function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
           </select>
         </label>
       </div>
+      {h.autoCategory ? (
+        <p className="category-result" aria-live="polite">
+          Suggested category{" "}
+          <strong>
+            {selected.category} → {selected.subcategory}
+          </strong>
+        </p>
+      ) : (
+        <label>
+          Subcategory
+          <select
+            value={selected.subcategory}
+            onChange={(e) => change({ ...h, subcategory: e.target.value })}
+          >
+            {!options.some((t) => t.name === "General") && (
+              <option>General</option>
+            )}
+            {options.map((t) => (
+              <option key={t.name}>{t.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="pair">
         <label>
           Start date
@@ -515,6 +561,7 @@ export default function App() {
     [message, setMessage] = useState(""),
     [chatHelp, setChatHelp] = useState(""),
     [toast, setToast] = useState(""),
+    [dashboardDay, setDashboardDay] = useState(indiaDay),
     [period, setPeriod] = useState("7"),
     [limit, setLimit] = useState(50),
     [exporting, setExporting] = useState(false);
@@ -595,7 +642,7 @@ export default function App() {
       habit: h.id,
       kind: "plan",
       day: today,
-      payload: h,
+      payload: { ...h, ...classification(h) },
     };
   }
   async function mark(r: Row, status: string, note = "", actualTime?: string) {
@@ -899,6 +946,7 @@ export default function App() {
             {tabs.map(({ name, icon: I }) => (
               <button
                 key={name}
+                aria-current={tab === name ? "page" : undefined}
                 className={tab === name ? "active" : ""}
                 onClick={() => nav(name)}
               >
@@ -929,7 +977,7 @@ export default function App() {
                 ? "My planner"
                 : tab === "Analytics"
                   ? "Activity analytics"
-                  : "Check-in chat"}
+                  : tab}
             </h1>
           </div>
           <button
@@ -1347,8 +1395,15 @@ export default function App() {
             </form>
           </section>
         )}
+        {tab === "Knowledge Book" && <KnowledgeBook habits={journal.current} />}
         {tab === "Analytics" && (
           <>
+            <DailyProgress
+              day={dashboardDay}
+              onDay={setDashboardDay}
+              rows={journal.rows(dashboardDay)}
+              now={now}
+            />
             <div className="analyticshead">
               <label>
                 Period{" "}

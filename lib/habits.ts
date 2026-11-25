@@ -1,16 +1,13 @@
 import { slotTimes, parseInterval, minutes, type InDay } from "./interval";
-export const categories = [
-  "Wellness",
-  "Learning",
-  "Mindfulness",
-  "Work",
-  "Personal",
-] as const;
+import { suggestCategory } from "./categories";
+export { categories } from "./categories";
 export const frequencies = ["Daily", "Weekdays", "Weekly", "Once"] as const;
 export type Habit = {
   id: string;
   title: string;
   category: string;
+  subcategory?: string;
+  autoCategory?: boolean;
   start: string;
   time: string;
   repeat: string;
@@ -192,18 +189,11 @@ export function blank(day = indiaDay()): Habit {
     id: crypto.randomUUID(),
     title: "",
     category: "Personal",
+    autoCategory: true,
     start: day,
     time: "",
     repeat: "Daily",
   };
-}
-export function categoryFor(s: string) {
-  if (/walk|yoga|water|exercise|run|fitness|stretch|sleep|gym/i.test(s))
-    return "Wellness";
-  if (/read|study|learn|course|practice|book/i.test(s)) return "Learning";
-  if (/journal|breathe|meditat|reflect/i.test(s)) return "Mindfulness";
-  if (/sales|call|client|work|meeting/i.test(s)) return "Work";
-  return "Personal";
 }
 export function draftPlan(input: string, day = indiaDay()): Habit[] {
   const days = [
@@ -292,7 +282,7 @@ export function draftPlan(input: string, day = indiaDay()): Habit[] {
       repeat,
       time: within ? within.first : i && time ? "" : time,
       ...(within ? { inDay: within.rule } : {}),
-      category: categoryFor(s),
+      ...suggestCategory(s, within ? within.first : i && time ? "" : time),
     }));
   });
 }
