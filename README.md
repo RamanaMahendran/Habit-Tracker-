@@ -12,7 +12,7 @@ In Check-in chat, **Enable sound alerts** unlocks the in-app chime and registers
 
 Check-in chat asks for a status only after the scheduled time passes. Forecasts for later rolling check-ins remain in Planner. The planning assistant answers schedule and progress questions inline and can propose a routine or reschedule a named habit. Use the review button to apply a suggested change.
 
-The Knowledge Book lists categories, subcategories, examples and active habits. New habits use the task name first and the first reminder time as a fallback. You can select a category manually. Analytics includes a daily timeline, time-of-day totals and actual check-in times.
+The Knowledge Book lists categories, subcategories, examples and active habits. New habits use the task name first and the first reminder time as a fallback. You can select a category manually. Analytics includes a daily timeline, Monday–Sunday weeks, calendar months, and twelve-month trends ending in the chosen month. Current periods run through today in IST. Select a trend row to open that month or day. The activity log follows the dashboard dates by default.
 
 The journal records plan versions and check-ins without automatic expiry. Analytics can export all scheduled dates, habit definitions and changes in a three-sheet XLSX workbook. Archived habits retain earlier history.
 

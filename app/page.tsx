@@ -56,7 +56,8 @@ import {
 } from "@/lib/habits";
 import { answerPlan, type Reply } from "@/lib/planning-assistant";
 import { KnowledgeBook } from "@/components/knowledge-book";
-import { DailyProgress } from "@/components/daily-progress";
+import { periodBounds, type ProgressPeriod } from "@/lib/progress-period";
+import { ProgressDashboard } from "@/components/daily-progress";
 import { classification, topics } from "@/lib/categories";
 import { slotTimes, messageTime } from "@/lib/interval";
 import {
@@ -562,7 +563,8 @@ export default function App() {
     [chatHelp, setChatHelp] = useState(""),
     [toast, setToast] = useState(""),
     [dashboardDay, setDashboardDay] = useState(indiaDay),
-    [period, setPeriod] = useState("7"),
+    [dashboardPeriod, setDashboardPeriod] = useState<ProgressPeriod>("Day"),
+    [period, setPeriod] = useState("dashboard"),
     [limit, setLimit] = useState(50),
     [exporting, setExporting] = useState(false);
   const [record, setRecord] = useState<{
@@ -620,14 +622,46 @@ export default function App() {
       }
     }
   }, [due, today]);
-  const rangeStart =
-    period === "all" ? journal.first : moveDay(today, 1 - Number(period));
-  const history = useMemo(() => {
-    const a: Row[] = [];
-    for (let d = today; d >= rangeStart; d = moveDay(d, -1))
-      a.push(...journal.rows(d));
-    return a;
-  }, [journal, rangeStart, today]);
+  const bounds = periodBounds(dashboardPeriod, dashboardDay, today);
+  const readRows = useCallback(
+    (start: string, end: string) => {
+      const result: Row[] = [];
+      for (
+        let date = end;
+        date >= start && date >= journal.first;
+        date = moveDay(date, -1)
+      )
+        result.push(...journal.rows(date));
+      return result;
+    },
+    [journal],
+  );
+  const dashboardRows = useMemo(
+    () => (tab === "Analytics" ? readRows(bounds.start, bounds.end) : []),
+    [tab, readRows, bounds.start, bounds.end],
+  );
+  const history = useMemo(
+    () =>
+      period === "dashboard"
+        ? dashboardRows.filter((r) => !r.outsideDay)
+        : tab === "Analytics"
+          ? readRows(
+              period === "all"
+                ? journal.first
+                : moveDay(today, 1 - Number(period)),
+              today,
+            )
+          : [],
+    [dashboardRows, tab, period, readRows, journal.first, today],
+  );
+  const changeDashboardDay = (d: string) => {
+    setDashboardDay(d);
+    setLimit(50);
+  };
+  const changeDashboardPeriod = (v: ProgressPeriod) => {
+    setDashboardPeriod(v);
+    setLimit(50);
+  };
   const newDraft = (h?: Partial<Habit>) => {
     setEditing(false);
     setDraft({ ...blank(day), ...h });
@@ -1398,15 +1432,19 @@ export default function App() {
         {tab === "Knowledge Book" && <KnowledgeBook habits={journal.current} />}
         {tab === "Analytics" && (
           <>
-            <DailyProgress
+            <ProgressDashboard
+              period={dashboardPeriod}
+              onPeriod={changeDashboardPeriod}
+              start={bounds.start}
+              end={bounds.end}
               day={dashboardDay}
-              onDay={setDashboardDay}
-              rows={journal.rows(dashboardDay)}
+              onDay={changeDashboardDay}
+              rows={dashboardRows}
               now={now}
             />
             <div className="analyticshead">
               <label>
-                Period{" "}
+                Activity log period{" "}
                 <select
                   value={period}
                   onChange={(e) => {
@@ -1414,6 +1452,7 @@ export default function App() {
                     setLimit(50);
                   }}
                 >
+                  <option value="dashboard">Dashboard dates</option>
                   <option value="7">Last 7 days</option>
                   <option value="30">Last 30 days</option>
                   <option value="365">Last year</option>

@@ -1243,3 +1243,80 @@ footer {
     font-size: 0.9rem;
   }
 }
+.period-tabs {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: #f0f4ee;
+  width: fit-content;
+  max-width: 100%;
+}
+.period-tabs button {
+  color: var(--forest);
+  padding: 7px 12px;
+  font-size: 0.9rem;
+  border-radius: 7px;
+}
+.period-tabs button[aria-pressed="true"] {
+  background: var(--forest);
+  color: white;
+}
+.period-dates {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  font-size: 0.94rem;
+}
+.period-dates button:disabled {
+  opacity: 0.35;
+}
+.period-trend {
+  margin-top: 20px;
+}
+.trend-labels,
+.trend-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.trend-labels {
+  font-size: 0.85rem;
+  color: var(--muted);
+  padding: 8px 0;
+}
+.trend-row {
+  width: 100%;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  padding: 9px 0;
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+}
+.trend-row:hover {
+  background: #f5f8f1;
+}
+.trend-row > span:first-child {
+  width: 7rem;
+}
+.trend-row > span:last-child {
+  width: 4rem;
+  text-align: right;
+}
+.trend-track {
+  display: block;
+  flex: 1;
+  height: 7px;
+  border-radius: 6px;
+  background: #e4ebdf;
+  overflow: hidden;
+}
+.trend-track i {
+  display: block;
+  height: 100%;
+  background: var(--forest);
+}

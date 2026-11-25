@@ -1,3 +1,8 @@
+import {
+  periodBounds,
+  shiftPeriod,
+  trendBuckets,
+} from "../lib/progress-period";
 import { classification, suggestCategory, timeBand } from "../lib/categories";
 import { progressStatus, timingNote } from "../components/daily-progress";
 import assert from "node:assert/strict";
@@ -164,3 +169,33 @@ assert.equal(
   "Medication",
 );
 console.log("Planner, categories, daily dashboard and reminder checks passed.");
+
+assert.deepEqual(periodBounds("1 week", "2026-11-25", day), {
+  start: "2026-11-23",
+  end: day,
+});
+assert.deepEqual(periodBounds("1 week", "2026-01-01", day), {
+  start: "2025-12-29",
+  end: "2026-01-04",
+});
+assert.deepEqual(periodBounds("1 month", "2024-02-07", day), {
+  start: "2024-02-01",
+  end: "2024-02-29",
+});
+const year = periodBounds("12 months", day, day);
+assert.deepEqual(year, { start: "2025-12-01", end: day });
+assert.equal(shiftPeriod("1 month", "2024-03-31", -1), "2024-02-01");
+assert.equal(shiftPeriod("12 months", day, -1), "2025-11-01");
+const sample = journal.rows(day).filter((r) => r.id === flower.id);
+const yearTrend = trendBuckets(year.start, year.end, "12 months", [
+  ...sample,
+  { ...sample[0], outsideDay: true },
+]);
+assert.equal(yearTrend.length, 12);
+assert.equal(yearTrend[0].total, 0);
+assert.deepEqual([yearTrend[11].total, yearTrend[11].done], [5, 1]);
+assert.equal(
+  trendBuckets("2024-02-01", "2024-02-29", "1 month", []).length,
+  29,
+);
+console.log("Calendar ranges and progress totals passed.");
