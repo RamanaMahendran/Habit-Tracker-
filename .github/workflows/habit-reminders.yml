@@ -1,0 +1,25 @@
+name: Deliver due habit reminders
+on:
+  schedule:
+    - cron: "2-59/5 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [public/version.json]
+permissions:
+  id-token: write
+concurrency:
+  group: deliver-habit-reminders
+  cancel-in-progress: false
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check for due reminders
+        shell: bash
+        run: |
+          set -euo pipefail
+          token=$(curl --fail --silent --show-error -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=habit-grove-reminders" | jq -er '.value')
+          echo "::add-mask::$token"
+          curl --fail --silent --show-error --retry 2 -X POST -H "Authorization: Bearer $token" https://habit-grove-planner.ramanan-portfolio93.chatgpt.site/api/reminders/deliver
