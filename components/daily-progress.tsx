@@ -11,13 +11,14 @@ import {
   displayTime,
   indiaDay,
   isOverdue,
+  reminderDay,
   type Row,
 } from "@/lib/habits";
 import { minutes } from "@/lib/interval";
 import { timeBand } from "@/lib/categories";
 export function progressStatus(row: Row, now: Date, today: string) {
   if (row.status !== "Pending") return row.status;
-  if (row.day < today) return "Unrecorded";
+  if (reminderDay(row) < today) return "Unrecorded";
   if (row.rolling && !row.next) return "Estimated";
   if (!row.time) return "Anytime";
   return isOverdue(row, now) ? "Overdue" : "Upcoming";
@@ -226,6 +227,15 @@ export function ProgressDashboard({
                     <time>{displayTime(r.time)}</time>
                     <div>
                       <strong>{r.title}</strong>
+                      {r.reviewPreviousDay && (
+                        <small>
+                          Check-in{" "}
+                          {displayDay(reminderDay(r), {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </small>
+                      )}
                       {r.status === "Done" && r.actualTime && (
                         <small>{timingNote(r)}</small>
                       )}

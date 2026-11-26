@@ -14,6 +14,7 @@ export type Habit = {
   archived?: boolean;
   inDay?: InDay;
   rolling?: boolean;
+  reviewPreviousDay?: boolean;
 };
 export type CheckIn = {
   status: string;
@@ -37,13 +38,19 @@ export type Row = Habit & {
   next: boolean;
   outsideDay: boolean;
 };
+export function reminderDay(row: Row) {
+  return row.reviewPreviousDay ? moveDay(row.day, 1) : row.day;
+}
+export function reminderAt(row: Row) {
+  return Date.parse(reminderDay(row) + "T" + row.time + ":00+05:30");
+}
 export function isOverdue(row: Row, now: Date): boolean {
   return (
     row.status === "Pending" &&
     row.next &&
     !row.outsideDay &&
     !!row.time &&
-    now.getTime() > Date.parse(row.day + "T" + row.time + ":00+05:30")
+    now.getTime() > reminderAt(row)
   );
 }
 
@@ -125,6 +132,9 @@ export function rowsForHabit(
     };
   });
 }
+const byTime = (a: Row, b: Row) =>
+  (a.time || "99").localeCompare(b.time || "99") ||
+  a.title.localeCompare(b.title);
 export function indexJournal(entries: Entry[]) {
   const plans = new Map<string, Entry[]>();
   const byDay = new Map<string, Map<string, CheckIn>>();
@@ -167,17 +177,19 @@ export function indexJournal(entries: Entry[]) {
           previousActual,
         );
       })
-      .sort(
-        (a, b) =>
-          (a.time || "99").localeCompare(b.time || "99") ||
-          a.title.localeCompare(b.title),
-      );
+      .sort(byTime);
+  const checkIns = (day: string): Row[] =>
+    [
+      ...rows(day).filter((r) => !r.reviewPreviousDay),
+      ...rows(moveDay(day, -1)).filter((r) => r.reviewPreviousDay),
+    ].sort(byTime);
   const current = Array.from(
     plans.values(),
     (v) => v[v.length - 1].payload as Habit,
   );
   return {
     rows,
+    checkIns,
     current,
     first: entries
       .filter((e) => e.kind === "plan")

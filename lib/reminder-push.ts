@@ -5,6 +5,7 @@ import {
   indiaTime,
   indexJournal,
   isOverdue,
+  reminderAt,
   moveDay,
   type Entry,
   type Row,
@@ -72,9 +73,10 @@ export async function dueRows(owner: string, now: Date) {
     .DB!.prepare(
       `SELECT seq,habit,kind,day,payload,created FROM habit_journal WHERE owner=? AND (
     seq IN (SELECT max(seq) FROM habit_journal WHERE owner=? AND kind='plan' AND day<=? GROUP BY habit)
+    OR seq IN (SELECT max(seq) FROM habit_journal WHERE owner=? AND kind='plan' AND day<=? GROUP BY habit)
     OR (kind='status' AND day BETWEEN ? AND ?)) ORDER BY seq`,
     )
-    .bind(owner, owner, day, moveDay(day, -1), day)
+    .bind(owner, owner, day, owner, moveDay(day, -1), moveDay(day, -1), day)
     .all();
   const entries = res.results.map((e) => ({
     ...e,
@@ -82,7 +84,7 @@ export async function dueRows(owner: string, now: Date) {
   })) as Entry[];
   const m = minutes(indiaTime(now));
   return indexJournal(entries)
-    .rows(day)
+    .checkIns(day)
     .filter(
       (r) => isOverdue(r, now) && (r.rolling || m - minutes(r.time) < 30),
     );
@@ -95,7 +97,7 @@ export async function deliverDevice(
   const db = env.DB!;
   const keys: string[] = [];
   for (const r of rows) {
-    const timestamp = Date.parse(r.day + "T" + r.time + ":00+05:30");
+    const timestamp = reminderAt(r);
     if (!r.rolling && timestamp < device.enabledAt - 60000) continue;
     const key = await digest(
       [device.id, r.id, r.day, r.slot, r.time].join("|"),

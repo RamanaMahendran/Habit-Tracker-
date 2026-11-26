@@ -1,5 +1,6 @@
 import { suggestCategory } from "./categories";
 import {
+  blank,
   dateObj,
   displayDay,
   displayTime,
@@ -179,6 +180,55 @@ export function answerPlan(
       q,
     );
   if (
+    /\b(yesterday|previous day|day before|next day|following day)\b/i.test(
+      raw,
+    ) &&
+    /\b(track|check[ -]?in|log|record|remind)\b/i.test(raw)
+  ) {
+    const request = raw.match(
+      /^(?:please[, ]+)?(?:(?:i (?:want|need) to|help me)\s+)?(?:track|add (?:a habit (?:for|to)|a task (?:for|to))|remind me to check in (?:on|about))\s+([^.!?\n;]+)/i,
+    );
+    if (request) {
+      const title = request[1]
+        .replace(
+          /\s+(?:every day|daily|for (?:yesterday|the previous day)|starting yesterday|at \d{1,2}|and (?:log|record|remind|check)|with a reminder|the next day|tomorrow)\b.*$/i,
+          "",
+        )
+        .trim()
+        .slice(0, 160);
+      if (!title)
+        return {
+          text: "What habit should I track? You can give me its name and a time to check in the following day.",
+        };
+      const existing = active.find(
+        (h) => h.title.toLowerCase() === title.toLowerCase(),
+      );
+      if (existing?.inDay)
+        return {
+          text: "This habit has multiple check-ins per day. Previous-day review is available for habits with one check-in per day.",
+        };
+      const explicitTime = messageTime(raw);
+      const time = explicitTime || existing?.time || "08:00";
+      const start =
+        /\btomorrow\b/.test(q) || /\bstart(?:ing)? (?:today|now)\b/.test(q)
+          ? today
+          : moveDay(today, -1);
+      const h: Habit = existing
+        ? { ...existing, time, reviewPreviousDay: true }
+        : {
+            ...blank(start),
+            ...suggestCategory(title, time),
+            title,
+            time,
+            reviewPreviousDay: true,
+          };
+      return {
+        text: `${h.title} will ask you to check in the following day at ${displayTime(time)} IST. Each result goes in the report for the day you’re reviewing.${existing ? " The change applies from today’s reporting date." : ""} ${explicitTime || existing?.time ? "Review and save to enable it." : "I used 8:00 AM as the default. You can change it before saving."}`,
+        ...(existing ? { edit: h } : { create: [h] }),
+      };
+    }
+  }
+  if (
     /\b(categor(?:y|ies)|categorise|categorize|classify)\b/.test(q) &&
     (question || /^(categorise|categorize|classify)\b/.test(q))
   ) {
@@ -221,7 +271,9 @@ export function answerPlan(
       q,
     )
   ) {
-    const pending = journal.rows(day).filter((r) => r.next && !r.outsideDay);
+    const pending = journal
+      .checkIns(day)
+      .filter((r) => r.next && !r.outsideDay);
     const late = pending.filter((r) => isOverdue(r, now));
     const timed = pending.filter((r) => r.time && !isOverdue(r, now));
     const flexible = pending.filter((r) => !r.time);
@@ -260,7 +312,7 @@ export function answerPlan(
     const overdueOnly = /\b(overdue|late|past due)\b/.test(q);
     const pendingOnly = nextOnly || /\b(pending|remaining|left)\b/.test(q);
     const rows = journal
-      .rows(day)
+      .checkIns(day)
       .filter(
         (r) =>
           !r.outsideDay &&

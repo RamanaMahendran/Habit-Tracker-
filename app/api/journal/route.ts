@@ -10,6 +10,7 @@ import {
   type CheckIn,
   rowsForHabit,
   scheduled,
+  moveDay,
   type Habit,
 } from "@/lib/habits";
 export const dynamic = "force-dynamic";
@@ -111,6 +112,9 @@ export async function POST(req: Request) {
         !h.title.trim() ||
         h.title.length > 160 ||
         !date(h.start) ||
+        (h.reviewPreviousDay !== undefined &&
+          typeof h.reviewPreviousDay !== "boolean") ||
+        (h.reviewPreviousDay && (!h.time || h.inDay || h.rolling)) ||
         (h.inDay !== undefined &&
           (!h.inDay ||
             typeof h.inDay !== "object" ||
@@ -141,6 +145,7 @@ export async function POST(req: Request) {
         time: h.time,
         repeat: h.repeat,
         archived: h.archived === true,
+        ...(h.reviewPreviousDay ? { reviewPreviousDay: true } : {}),
         ...(h.rolling === true && h.inDay && "count" in h.inDay
           ? { rolling: true }
           : {}),
@@ -174,6 +179,11 @@ export async function POST(req: Request) {
           409,
         );
       const h = JSON.parse(plan!.payload) as Habit;
+      if (h.reviewPreviousDay && moveDay(day, 1) > today)
+        return reply(
+          { error: "Log this check-in on or after its reminder date." },
+          409,
+        );
       const slots = slotTimes(h.time, h.inDay);
       const slot = v.slot ?? "";
       if (typeof slot !== "string" || (slot && !slots.slice(1).includes(slot)))

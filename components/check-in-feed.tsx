@@ -9,7 +9,8 @@ import {
 } from "@/lib/habits";
 import { SoundSettings } from "@/components/reminder-sound";
 
-const rowKey = (id: string, slot: string) => `${id}|${slot}`;
+const rowKey = (id: string, day: string, slot: string) =>
+  `${id}|${day}|${slot}`;
 
 export function CheckInFeed({
   day,
@@ -33,23 +34,34 @@ export function CheckInFeed({
   children: React.ReactNode;
 }) {
   const latest = new Map<string, Entry>();
+  const reportDays = new Set(recorded.map((r) => r.day));
   for (const entry of events) {
-    if (entry.kind !== "status" || entry.day !== day) continue;
+    if (entry.kind !== "status" || !reportDays.has(entry.day)) continue;
     const mark = entry.payload as CheckIn;
-    latest.set(rowKey(entry.habit, mark.slot || ""), entry);
+    latest.set(rowKey(entry.habit, entry.day, mark.slot || ""), entry);
   }
   const history = recorded
-    .map((row) => ({ row, update: latest.get(rowKey(row.id, row.slot)) }))
+    .map((row) => ({
+      row,
+      update: latest.get(rowKey(row.id, row.day, row.slot)),
+    }))
     .sort((a, b) => (b.update?.seq ?? 0) - (a.update?.seq ?? 0));
   const readOnly = busy || day > today;
   const renderPending = (row: Row) => (
-    <div className="due-check-in" key={rowKey(row.id, row.slot)}>
+    <div className="due-check-in" key={rowKey(row.id, row.day, row.slot)}>
       <div className="due-check-in-top">
         <div>
           <strong>{row.title}</strong>
           <small>
             <Clock size={13} />
             {displayTime(row.time)} · Overdue
+            {row.reviewPreviousDay &&
+              " · For " +
+                displayDay(row.day, {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                })}
           </small>
         </div>
         <button
@@ -130,7 +142,7 @@ export function CheckInFeed({
             {history.map(({ row, update }) => {
               const note = (update?.payload as CheckIn | undefined)?.note;
               return (
-                <li key={rowKey(row.id, row.slot)}>
+                <li key={rowKey(row.id, row.day, row.slot)}>
                   <div className="recorded-check-in-top">
                     <strong>{row.title}</strong>
                     <span className={`pill ${row.status.toLowerCase()}`}>
@@ -139,6 +151,9 @@ export function CheckInFeed({
                   </div>
                   <small>
                     {displayTime(row.actualTime || row.time)}
+                    {row.reviewPreviousDay &&
+                      " · For " +
+                        displayDay(row.day, { month: "short", day: "numeric" })}
                     {update &&
                       !row.actualTime &&
                       ` · Logged at ${displayTime(indiaTime(new Date(update.created)))}`}

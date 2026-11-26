@@ -50,6 +50,7 @@ import {
   blank,
   indexJournal,
   isOverdue,
+  reminderDay,
   type Row,
   type Habit,
   type Entry,
@@ -291,7 +292,15 @@ function Modal({
     </dialog>
   );
 }
-function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
+function Fields({
+  h,
+  change,
+  editing = false,
+}: {
+  h: Habit;
+  change: (h: Habit) => void;
+  editing?: boolean;
+}) {
   const selected = classification(h);
   const options = topics(selected.category);
   const rule = h.inDay;
@@ -372,7 +381,7 @@ function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
       )}
       <div className="pair">
         <label>
-          Start date
+          {h.reviewPreviousDay ? "First day to track" : "Start date"}
           <input
             type="date"
             required
@@ -381,10 +390,14 @@ function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
           />
         </label>
         <label>
-          {rule ? "First check-in · IST" : "Check-in time · IST"}
+          {h.reviewPreviousDay
+            ? "Next-day reminder · IST"
+            : rule
+              ? "First check-in · IST"
+              : "Check-in time · IST"}
           <input
             type="time"
-            required={!!rule}
+            required={!!rule || !!h.reviewPreviousDay}
             value={h.time}
             onChange={(e) => change({ ...h, time: e.target.value })}
           />
@@ -393,7 +406,38 @@ function Fields({ h, change }: { h: Habit; change: (h: Habit) => void }) {
       <label className="interval-switch">
         <input
           type="checkbox"
+          checked={!!h.reviewPreviousDay}
+          disabled={!!rule}
+          onChange={(e) => {
+            const reviewPreviousDay = e.target.checked;
+            const today = indiaDay();
+            const start =
+              !editing &&
+              h.start === (reviewPreviousDay ? today : moveDay(today, -1))
+                ? reviewPreviousDay
+                  ? moveDay(today, -1)
+                  : today
+                : h.start;
+            change({
+              ...h,
+              reviewPreviousDay,
+              start,
+              time: reviewPreviousDay ? h.time || "08:00" : h.time,
+            });
+          }}
+        />
+        Review the previous day
+      </label>
+      {h.reviewPreviousDay && (
+        <p className="interval-preview">
+          A check-in the next day is saved under the date you’re reviewing.
+        </p>
+      )}
+      <label className="interval-switch">
+        <input
+          type="checkbox"
           checked={!!rule}
+          disabled={!!h.reviewPreviousDay}
           onChange={(e) => {
             if (e.target.checked)
               change({
@@ -574,19 +618,26 @@ export default function App() {
   } | null>(null);
   const [recordError, setRecordError] = useState("");
   const today = indiaDay(now),
-    rows = journal.rows(day),
+    rows = journal.checkIns(day),
     pendingCheckIns = rows.filter((r) => isOverdue(r, now)),
     recordedCheckIns = rows.filter((r) => r.status !== "Pending"),
     scheduled = rows.filter((r) => !r.outsideDay),
     done = scheduled.filter((r) => r.status === "Done").length,
     overdue = pendingCheckIns.length;
+  const lastToday = useRef(today);
+  useEffect(() => {
+    const previous = lastToday.current;
+    lastToday.current = today;
+    if (previous !== today)
+      setDay((current) => (current === previous ? today : current));
+  }, [today]);
   const plannerEnd = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const panel = plannerEnd.current?.parentElement;
     if (panel) panel.scrollTop = panel.scrollHeight;
   }, [turns]);
   const monday = moveDay(day, -((dateObj(day).getUTCDay() + 6) % 7)),
-    todayRows = journal.rows(today),
+    todayRows = journal.checkIns(today),
     due = todayRows.filter((r) => isOverdue(r, now));
   const lastToast = useRef(new Set<string>());
   useEffect(() => {
@@ -600,7 +651,7 @@ export default function App() {
   }, [toast]);
   useEffect(() => {
     for (const r of due) {
-      const key = [r.id, today, r.slot, r.time].join("|");
+      const key = [r.id, r.day, r.slot, r.time].join("|");
       if (!lastToast.current.has(key)) {
         lastToast.current.add(key);
         if (soundEnabled() && document.visibilityState === "visible") ring();
@@ -711,7 +762,15 @@ export default function App() {
       ])
     ) {
       setToast(
-        r.title + (r.inDay ? " · " + displayTime(r.time) : "") + " · " + status,
+        r.title +
+          (r.reviewPreviousDay
+            ? " · Saved for " +
+              displayDay(r.day, { month: "short", day: "numeric" })
+            : r.inDay
+              ? " · " + displayTime(r.time)
+              : "") +
+          " · " +
+          status,
       );
       setChatHelp("");
       return true;
@@ -748,8 +807,11 @@ export default function App() {
     e.preventDefault();
     const s = message.trim();
     if (!s) return;
-    const targetDay = /yesterday/i.test(s) ? moveDay(today, -1) : day;
-    const possible = journal.rows(targetDay);
+    const previousDay = /\b(yesterday|previous day)\b/i.test(s);
+    const targetDay = previousDay ? moveDay(today, -1) : day;
+    const possible = (
+      previousDay ? journal.rows(targetDay) : journal.checkIns(targetDay)
+    ).filter((row) => reminderDay(row) <= today);
     const status = /\b(skip(?:ped)?|missed|couldn.t|didn.t)\b/i.test(s)
       ? "Skipped"
       : /\b(undo|reopen|pending)\b/i.test(s)
@@ -811,7 +873,7 @@ export default function App() {
       .filter((r) =>
         r.rolling && status === "Done"
           ? r.next
-          : !requestedTime || r.time === requestedTime,
+          : r.reviewPreviousDay || !requestedTime || r.time === requestedTime,
       )
       .map((r) => ({
         r,
@@ -842,7 +904,7 @@ export default function App() {
     }
     if (await mark(pick, status, s)) {
       setMessage("");
-      setDay(targetDay);
+      setDay(reminderDay(pick));
     }
   }
   async function exportExcel() {
@@ -1161,7 +1223,7 @@ export default function App() {
                     rows.map((r) => (
                       <div
                         className="habitrow scheduled-habit"
-                        key={r.id + r.slot}
+                        key={r.id + r.day + r.slot}
                       >
                         <button
                           aria-label={
@@ -1202,6 +1264,12 @@ export default function App() {
                             !r.outsideDay
                               ? " · Estimated"
                               : ""}
+                            {r.reviewPreviousDay &&
+                              " · For " +
+                                displayDay(r.day, {
+                                  month: "short",
+                                  day: "numeric",
+                                })}
                             {r.status === "Skipped" ? " · Skipped" : ""}
                           </small>
                         </div>
@@ -1264,6 +1332,7 @@ export default function App() {
                               ? "Every " + h.inDay.hours + " hours from "
                               : ""}
                             {displayTime(h.time)}
+                            {h.reviewPreviousDay && " · Reviews previous day"}
                           </small>
                         </div>
                         <SquarePen size={17} />
@@ -1512,13 +1581,23 @@ export default function App() {
                         </td>
                         <td role="cell" className="log-time">
                           {r.outsideDay ? "Outside today" : displayTime(r.time)}
+                          {r.reviewPreviousDay && (
+                            <small>
+                              {" "}
+                              ·{" "}
+                              {displayDay(reminderDay(r), {
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </small>
+                          )}
                           {r.actualTime && r.rolling && (
                             <small> · Actual {displayTime(r.actualTime)}</small>
                           )}
                         </td>
                         <td role="cell" className="log-status">
                           <span className={"pill " + r.status.toLowerCase()}>
-                            {r.status === "Pending" && r.day < today
+                            {r.status === "Pending" && reminderDay(r) < today
                               ? "Unrecorded"
                               : r.status}
                           </span>
@@ -1650,7 +1729,7 @@ export default function App() {
           close={() => setDraft(null)}
         >
           <form onSubmit={submitDraft}>
-            <Fields h={draft} change={setDraft} />
+            <Fields h={draft} change={setDraft} editing={editing} />
             <p className="hint">
               <Bell size={16} /> In-app prompts appear after the check-in time
               passes. For background reminders, enable sound alerts in Check-in

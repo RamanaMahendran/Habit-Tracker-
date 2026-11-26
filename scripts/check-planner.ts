@@ -225,3 +225,90 @@ assert.equal(productivityArea("Routines"), "Personal");
 for (const category of ["Health", "Wellness", "Mindfulness"])
   assert.equal(productivityArea(category), "Wellbeing");
 console.log("Productivity area checks passed.");
+
+const nextDay = "2026-11-26";
+const reviewNow = new Date(nextDay + "T08:01:00+05:30");
+const reviewRequest =
+  "I need to track Evening reflection. The task reminder should be for yesterday i should record today. But the data should store in yesterday report";
+const proposedReview = answerPlan(reviewRequest, journal, nextDay, reviewNow);
+const reviewHabit = proposedReview.create?.[0];
+assert.ok(
+  reviewHabit,
+  "A previous-day tracking request should produce a habit draft",
+);
+assert.deepEqual(
+  [
+    reviewHabit.title,
+    reviewHabit.start,
+    reviewHabit.time,
+    reviewHabit.repeat,
+    reviewHabit.reviewPreviousDay,
+  ],
+  ["Evening reflection", day, "08:00", "Daily", true],
+);
+const reviewPlan: Entry = {
+  kind: "plan",
+  seq: 1,
+  habit: reviewHabit.id,
+  day,
+  payload: reviewHabit,
+  created: reviewNow.toISOString(),
+};
+let reviewJournal = indexJournal([reviewPlan]);
+assert.equal(reviewJournal.checkIns(day).length, 0);
+const reviewRow = reviewJournal.checkIns(nextDay)[0];
+assert.equal(reviewRow.day, day);
+assert.equal(
+  isOverdue(reviewRow, new Date(nextDay + "T07:59:59+05:30")),
+  false,
+);
+assert.equal(
+  isOverdue(reviewRow, new Date(nextDay + "T08:00:00+05:30")),
+  false,
+);
+assert.equal(isOverdue(reviewRow, reviewNow), true);
+assert.equal(
+  progressStatus(reviewJournal.rows(day)[0], reviewNow, nextDay),
+  "Overdue",
+);
+const result: Entry = {
+  kind: "status",
+  seq: 2,
+  habit: reviewHabit.id,
+  day: reviewRow.day,
+  payload: { status: "Done", note: "" },
+  created: reviewNow.toISOString(),
+};
+reviewJournal = indexJournal([reviewPlan, result]);
+assert.equal(reviewJournal.rows(day)[0].status, "Done");
+assert.equal(reviewJournal.rows(nextDay)[0].status, "Pending");
+assert.equal(isOverdue(reviewJournal.checkIns(nextDay)[0], reviewNow), false);
+assert.match(
+  answerPlan("Show yesterday’s report", reviewJournal, nextDay, reviewNow).text,
+  /1 completed/,
+);
+assert.equal(
+  answerPlan(
+    "Track Evening reflection daily and record the previous day at 10 am",
+    reviewJournal,
+    nextDay,
+    reviewNow,
+  ).edit?.time,
+  "10:00",
+);
+const edited: Entry = {
+  ...reviewPlan,
+  seq: 3,
+  day: nextDay,
+  payload: { ...reviewHabit, time: "09:00", reviewPreviousDay: false },
+};
+assert.deepEqual(
+  indexJournal([reviewPlan, result, edited])
+    .checkIns(nextDay)
+    .map((r) => [r.day, r.time]),
+  [
+    [day, "08:00"],
+    [nextDay, "09:00"],
+  ],
+);
+console.log("Previous-day scheduling and reporting checks passed.");

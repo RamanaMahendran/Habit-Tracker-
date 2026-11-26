@@ -8,6 +8,7 @@ import {
   indiaDay,
   moveDay,
   scheduled,
+  reminderDay,
 } from "./habits";
 const xml = (x: unknown) =>
   String(x ?? "")
@@ -37,6 +38,7 @@ export function workbook(rows: Row[], events: Entry[], habits: Habit[]) {
           "Frequency",
           "Status",
           "Actual time (IST)",
+          "Reminder date (IST)",
           "Subcategory",
         ],
         ...rows.map((r) => [
@@ -45,10 +47,11 @@ export function workbook(rows: Row[], events: Entry[], habits: Habit[]) {
           r.category,
           r.time,
           r.repeat,
-          r.status === "Pending" && r.day < indiaDay()
+          r.status === "Pending" && reminderDay(r) < indiaDay()
             ? "Unrecorded"
             : r.status,
           r.actualTime || "",
+          reminderDay(r),
           r.subcategory ||
             classification({ ...r, autoCategory: false }).subcategory,
         ]),
@@ -197,6 +200,7 @@ export function calendar(h: Habit) {
   let start = h.start;
   while (!scheduled({ ...h, archived: false }, start))
     start = moveDay(start, 1);
+  if (h.reviewPreviousDay) start = moveDay(start, 1);
   const stamp = (date: Date) =>
     date
       .toISOString()
@@ -227,7 +231,13 @@ export function calendar(h: Habit) {
       const prev = time < "05:30";
       line.push(
         "RRULE:FREQ=WEEKLY;BYDAY=" +
-          (prev ? "SU,MO,TU,WE,TH" : "MO,TU,WE,TH,FR"),
+          (h.reviewPreviousDay
+            ? prev
+              ? "MO,TU,WE,TH,FR"
+              : "TU,WE,TH,FR,SA"
+            : prev
+              ? "SU,MO,TU,WE,TH"
+              : "MO,TU,WE,TH,FR"),
       );
     }
     if (h.repeat === "Daily" || h.repeat === "Weekly")
