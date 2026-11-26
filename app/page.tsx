@@ -74,6 +74,8 @@ import {
 import release from "../public/version.json";
 import { workbook, saveFile, calendar } from "@/lib/downloads";
 
+import { CheckInButtons } from "@/components/check-in-buttons";
+import { checkInLabel, customCheckInStatus } from "@/lib/check-in-labels";
 import { CheckInFeed } from "@/components/check-in-feed";
 import { JournalAccess } from "@/components/journal-access";
 import { journalFetch, onJournalSwitch } from "@/lib/journal-key";
@@ -403,6 +405,29 @@ function Fields({
           />
         </label>
       </div>
+      <label>
+        Check-in buttons
+        <select
+          value={h.checkInStyle ?? "standard"}
+          onChange={(e) =>
+            change({
+              ...h,
+              checkInStyle:
+                e.target.value === "watched-missed"
+                  ? "watched-missed"
+                  : undefined,
+            })
+          }
+        >
+          <option value="standard">Done / Skip</option>
+          <option value="watched-missed">Watched / Missed</option>
+        </select>
+      </label>
+      {h.checkInStyle === "watched-missed" && (
+        <p className="interval-preview">
+          Missed counts toward your completion rate. Watched logs a lapse.
+        </p>
+      )}
       <label className="interval-switch">
         <input
           type="checkbox"
@@ -770,7 +795,7 @@ export default function App() {
               ? " · " + displayTime(r.time)
               : "") +
           " · " +
-          status,
+          checkInLabel(r, status),
       );
       setChatHelp("");
       return true;
@@ -812,7 +837,7 @@ export default function App() {
     const possible = (
       previousDay ? journal.rows(targetDay) : journal.checkIns(targetDay)
     ).filter((row) => reminderDay(row) <= today);
-    const status = /\b(skip(?:ped)?|missed|couldn.t|didn.t)\b/i.test(s)
+    const defaultStatus = /\b(skip(?:ped)?|missed|couldn.t|didn.t)\b/i.test(s)
       ? "Skipped"
       : /\b(undo|reopen|pending)\b/i.test(s)
         ? "Pending"
@@ -821,9 +846,9 @@ export default function App() {
             )
           ? "Done"
           : "";
-    if (!status) {
+    if (!defaultStatus && !possible.some((r) => customCheckInStatus(r, s))) {
       setChatHelp(
-        "Try “Finished my walk” or “Skipped reading yesterday”. You can also tap Done or Skip on an overdue check-in.",
+        "Try “Finished my walk” or “Skipped reading yesterday”. You can also tap the buttons on a check-in.",
       );
       return;
     }
@@ -843,6 +868,8 @@ export default function App() {
       "completed",
       "finished",
       "skipped",
+      "watched",
+      "missed",
       "did",
       "task",
       "habit",
@@ -870,28 +897,37 @@ export default function App() {
     const terms = tokens(s);
     const requestedTime = messageTime(s);
     const ranks = possible
-      .filter((r) =>
-        r.rolling && status === "Done"
-          ? r.next
-          : r.reviewPreviousDay || !requestedTime || r.time === requestedTime,
+      .map((row) => ({
+        r: row,
+        status: customCheckInStatus(row, s) || defaultStatus,
+      }))
+      .filter(
+        ({ r, status }) =>
+          status &&
+          (r.rolling && status === "Done"
+            ? r.next
+            : r.reviewPreviousDay ||
+              !requestedTime ||
+              r.time === requestedTime),
       )
-      .map((r) => ({
-        r,
-        n: tokens(r.title).filter((t) => terms.includes(t)).length,
+      .map((candidate) => ({
+        ...candidate,
+        n: tokens(candidate.r.title).filter((t) => terms.includes(t)).length,
       }))
       .sort((a, b) => b.n - a.n);
-    const pick =
+    const chosen =
       ranks.length === 1 && (ranks[0].n || !terms.length)
-        ? ranks[0].r
+        ? ranks[0]
         : ranks[0]?.n && ranks[0].n > (ranks[1]?.n || 0)
-          ? ranks[0].r
+          ? ranks[0]
           : null;
-    if (!pick) {
+    if (!chosen) {
       setChatHelp(
         "Which check-in did you mean? Include its name and time, for example “Finished my walk at 10 am”, or tap its button.",
       );
       return;
     }
+    const { r: pick, status } = chosen;
     if (pick.rolling && status === "Done") {
       setRecordError("");
       setRecord({
@@ -1225,28 +1261,30 @@ export default function App() {
                         className="habitrow scheduled-habit"
                         key={r.id + r.day + r.slot}
                       >
-                        <button
-                          aria-label={
-                            (r.status === "Done" ? "Reopen " : "Complete ") +
-                            r.title +
-                            (r.inDay ? " at " + displayTime(r.time) : "")
-                          }
-                          disabled={
-                            busy ||
-                            day > today ||
-                            (!!r.rolling && r.status === "Pending" && !r.next)
-                          }
-                          className={
-                            "check " + (r.status === "Done" ? "checked" : "")
-                          }
-                          onClick={() =>
-                            mark(r, r.status === "Done" ? "Pending" : "Done")
-                          }
-                        >
-                          <span className="check-mark">
-                            {r.status === "Done" && <Check size={15} />}
-                          </span>
-                        </button>
+                        {r.checkInStyle !== "watched-missed" && (
+                          <button
+                            aria-label={
+                              (r.status === "Done" ? "Reopen " : "Complete ") +
+                              r.title +
+                              (r.inDay ? " at " + displayTime(r.time) : "")
+                            }
+                            disabled={
+                              busy ||
+                              day > today ||
+                              (!!r.rolling && r.status === "Pending" && !r.next)
+                            }
+                            className={
+                              "check " + (r.status === "Done" ? "checked" : "")
+                            }
+                            onClick={() =>
+                              mark(r, r.status === "Done" ? "Pending" : "Done")
+                            }
+                          >
+                            <span className="check-mark">
+                              {r.status === "Done" && <Check size={15} />}
+                            </span>
+                          </button>
+                        )}
                         <Badge cat={r.category} />
                         <div className="stretch">
                           <b>{r.title}</b>
@@ -1270,8 +1308,30 @@ export default function App() {
                                   month: "short",
                                   day: "numeric",
                                 })}
-                            {r.status === "Skipped" ? " · Skipped" : ""}
+                            {r.status !== "Pending" &&
+                            r.checkInStyle === "watched-missed"
+                              ? " · " + checkInLabel(r, r.status)
+                              : r.status === "Skipped"
+                                ? " · Skipped"
+                                : ""}
                           </small>
+                          {r.checkInStyle === "watched-missed" &&
+                            (r.status === "Pending" ? (
+                              <CheckInButtons
+                                row={r}
+                                disabled={busy || day > today || !r.next}
+                                onMark={mark}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className="linkbtn reopen-check-in"
+                                disabled={busy || day > today}
+                                onClick={() => mark(r, "Pending")}
+                              >
+                                Reopen
+                              </button>
+                            ))}
                         </div>
                         <button
                           className="iconbtn"
@@ -1599,7 +1659,7 @@ export default function App() {
                           <span className={"pill " + r.status.toLowerCase()}>
                             {r.status === "Pending" && reminderDay(r) < today
                               ? "Unrecorded"
-                              : r.status}
+                              : checkInLabel(r, r.status)}
                           </span>
                         </td>
                       </tr>

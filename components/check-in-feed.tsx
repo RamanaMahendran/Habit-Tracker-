@@ -1,4 +1,6 @@
-import { Bell, Check, Clock, Ellipsis } from "lucide-react";
+import { CheckInButtons } from "@/components/check-in-buttons";
+import { checkInLabel } from "@/lib/check-in-labels";
+import { Bell, Clock, Ellipsis } from "lucide-react";
 import {
   displayDay,
   displayTime,
@@ -73,22 +75,7 @@ export function CheckInFeed({
           <Ellipsis size={19} />
         </button>
       </div>
-      <div className="check-in-actions">
-        <button
-          className="primary small"
-          disabled={readOnly}
-          onClick={() => onMark(row, "Done")}
-        >
-          <Check size={15} /> Done
-        </button>
-        <button
-          className="secondary"
-          disabled={readOnly}
-          onClick={() => onMark(row, "Skipped")}
-        >
-          Skip
-        </button>
-      </div>
+      <CheckInButtons row={row} disabled={readOnly} onMark={onMark} />
     </div>
   );
   return (
@@ -146,7 +133,7 @@ export function CheckInFeed({
                   <div className="recorded-check-in-top">
                     <strong>{row.title}</strong>
                     <span className={`pill ${row.status.toLowerCase()}`}>
-                      {row.status}
+                      {checkInLabel(row, row.status)}
                     </span>
                   </div>
                   <small>
@@ -165,7 +152,7 @@ export function CheckInFeed({
                         disabled={readOnly}
                         onClick={() => onMark(row, "Done")}
                       >
-                        Mark done
+                        Mark {checkInLabel(row, "Done").toLowerCase()}
                       </button>
                     )}
                     {row.status === "Done" && (
@@ -173,7 +160,7 @@ export function CheckInFeed({
                         disabled={readOnly}
                         onClick={() => onMark(row, "Skipped")}
                       >
-                        Mark skipped
+                        Mark {checkInLabel(row, "Skipped").toLowerCase()}
                       </button>
                     )}
                     {row.status === "Done" && row.rolling && (

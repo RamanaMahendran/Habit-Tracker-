@@ -1,3 +1,4 @@
+import { checkInLabel } from "@/lib/check-in-labels";
 import { useMemo } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import {
@@ -241,7 +242,7 @@ export function ProgressDashboard({
                       )}
                     </div>
                     <span className={"pill " + status.toLowerCase()}>
-                      {status}
+                      {checkInLabel(r, status)}
                     </span>
                   </li>
                 );

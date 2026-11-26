@@ -1,3 +1,4 @@
+import { checkInLabel } from "./check-in-labels";
 import { classification } from "./categories";
 import { slotTimes } from "./interval";
 import { zipSync, strToU8 } from "fflate";
@@ -49,7 +50,7 @@ export function workbook(rows: Row[], events: Entry[], habits: Habit[]) {
           r.repeat,
           r.status === "Pending" && reminderDay(r) < indiaDay()
             ? "Unrecorded"
-            : r.status,
+            : checkInLabel(r, r.status),
           r.actualTime || "",
           reminderDay(r),
           r.subcategory ||

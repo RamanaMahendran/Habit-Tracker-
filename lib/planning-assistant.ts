@@ -1,3 +1,4 @@
+import { checkInLabel } from "./check-in-labels";
 import { suggestCategory } from "./categories";
 import {
   blank,
@@ -25,7 +26,11 @@ export type Reply = {
 
 function scheduleLine(r: Row) {
   const detail =
-    r.status !== "Pending" ? r.status : r.rolling && !r.next ? "estimated" : "";
+    r.status !== "Pending"
+      ? checkInLabel(r, r.status)
+      : r.rolling && !r.next
+        ? "estimated"
+        : "";
   return [displayTime(r.time), r.title, detail].filter(Boolean).join(" · ");
 }
 
@@ -179,6 +184,34 @@ export function answerPlan(
     /^(what|whats|when|how|which|why|do i|did i|am i|is |are |can i|can you (show|tell|help))\b/.test(
       q,
     );
+  const labelRequest = raw.match(
+    /^(?:set (?:the )?check-in labels for\s+)?(.+?)\s+(?:should be|should use|to|use)\s+watched\s*[/,]\s*missed[.!]?$/i,
+  );
+  if (labelRequest) {
+    const title = labelRequest[1].trim();
+    const titleKey = (value: string) =>
+      value
+        .toLowerCase()
+        .replace(/(\p{L}{4,})(?:ation|ated)\b/gu, "$1")
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .trim();
+    const existing = active.find((h) => titleKey(h.title) === titleKey(title));
+    const time = "08:00";
+    const habit: Habit = existing
+      ? { ...existing, checkInStyle: "watched-missed" }
+      : {
+          ...blank(moveDay(today, -1)),
+          ...suggestCategory(title, time),
+          title: title.slice(0, 160),
+          time,
+          reviewPreviousDay: true,
+          checkInStyle: "watched-missed",
+        };
+    return {
+      text: `${habit.title} will use Watched and Missed. Missed counts as meeting the goal.${existing ? "" : " The draft checks in the following day at 8:00 AM IST."} Review and save to apply it.`,
+      ...(existing ? { edit: habit } : { create: [habit] }),
+    };
+  }
   if (
     /\b(yesterday|previous day|day before|next day|following day)\b/i.test(
       raw,

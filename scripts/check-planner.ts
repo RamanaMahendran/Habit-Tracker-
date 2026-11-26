@@ -1,3 +1,4 @@
+import { checkInLabel, customCheckInStatus } from "../lib/check-in-labels";
 import { productivityArea } from "../lib/productivity";
 import { formatRecoveryCode, parseRecoveryCode } from "../lib/journal-key";
 import {
@@ -312,3 +313,38 @@ assert.deepEqual(
   ],
 );
 console.log("Previous-day scheduling and reporting checks passed.");
+
+const labeledDraft = answerPlan(
+  "Screen-free evening should be Watched / Missed",
+  journal,
+  nextDay,
+  reviewNow,
+).create?.[0];
+assert.ok(labeledDraft);
+assert.equal(labeledDraft.checkInStyle, "watched-missed");
+assert.equal(labeledDraft.reviewPreviousDay, true);
+const labeledEdit = answerPlan(
+  "Evening reflection should be Watched / Missed",
+  reviewJournal,
+  nextDay,
+  reviewNow,
+).edit;
+assert.ok(labeledEdit);
+assert.equal(labeledEdit.id, reviewHabit.id);
+const afterLabelEdit = indexJournal([
+  reviewPlan,
+  result,
+  { ...reviewPlan, seq: 3, day: nextDay, payload: labeledEdit },
+]);
+const historicalResult = afterLabelEdit.checkIns(nextDay)[0];
+assert.equal(historicalResult.day, day);
+assert.equal(checkInLabel(historicalResult, historicalResult.status), "Missed");
+assert.equal(checkInLabel(historicalResult, "Skipped"), "Watched");
+assert.equal(
+  customCheckInStatus(historicalResult, "Watched yesterday"),
+  "Skipped",
+);
+assert.equal(customCheckInStatus(historicalResult, "Missed yesterday"), "Done");
+assert.equal(checkInLabel(walk, "Done"), "Done");
+assert.equal(customCheckInStatus(walk, "Missed"), "");
+console.log("Check-in label and previous-day attribution checks passed.");

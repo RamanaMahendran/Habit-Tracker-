@@ -112,6 +112,7 @@ export async function POST(req: Request) {
         !h.title.trim() ||
         h.title.length > 160 ||
         !date(h.start) ||
+        (h.checkInStyle !== undefined && h.checkInStyle !== "watched-missed") ||
         (h.reviewPreviousDay !== undefined &&
           typeof h.reviewPreviousDay !== "boolean") ||
         (h.reviewPreviousDay && (!h.time || h.inDay || h.rolling)) ||
@@ -145,6 +146,9 @@ export async function POST(req: Request) {
         time: h.time,
         repeat: h.repeat,
         archived: h.archived === true,
+        ...(h.checkInStyle === "watched-missed"
+          ? { checkInStyle: h.checkInStyle }
+          : {}),
         ...(h.reviewPreviousDay ? { reviewPreviousDay: true } : {}),
         ...(h.rolling === true && h.inDay && "count" in h.inDay
           ? { rolling: true }

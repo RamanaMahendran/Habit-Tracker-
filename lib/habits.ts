@@ -15,6 +15,7 @@ export type Habit = {
   inDay?: InDay;
   rolling?: boolean;
   reviewPreviousDay?: boolean;
+  checkInStyle?: "watched-missed";
 };
 export type CheckIn = {
   status: string;
@@ -161,7 +162,9 @@ export function indexJournal(entries: Entry[]) {
       .flatMap((versions) => {
         const event = versions.findLast((v) => v.day <= day);
         if (!event) return [];
-        const h = event.payload as Habit;
+        const recordedPlan = event.payload as Habit;
+        const latestPlan = versions.at(-1)!.payload as Habit;
+        const h = { ...recordedPlan, checkInStyle: latestPlan.checkInStyle };
         const yesterday = byDay.get(h.id + moveDay(day, -1));
         const previousActual = yesterday
           ? Array.from(yesterday.values())
