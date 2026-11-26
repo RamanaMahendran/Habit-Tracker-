@@ -1618,3 +1618,35 @@ footer {
   min-height: 36px;
   padding-inline: 0;
 }
+
+.reminder-popup {
+  position: fixed;
+  z-index: 6;
+  inset: max(12px, env(safe-area-inset-top)) 12px auto auto;
+  width: min(360px, calc(100% - 24px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #b5c9aa;
+  border-radius: 12px;
+  background: #f7fbf4;
+  color: var(--forest);
+  box-shadow: 0 5px 24px #13291c30;
+}
+.reminder-popup > svg {
+  flex-shrink: 0;
+}
+.reminder-popup > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.reminder-popup span {
+  display: block;
+}
+.reminder-popup button {
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+}

@@ -36,6 +36,60 @@ export async function POST(req: Request) {
       .run();
     return reply({ ok: true });
   }
+  if (body.action === "test") {
+    const device = await db
+      .prepare("SELECT endpoint FROM reminder_devices WHERE id=? AND owner=?")
+      .bind(id, user)
+      .first<{ endpoint: string }>();
+    if (!device)
+      return reply(
+        { error: "Enable phone notifications for this journal first." },
+        409,
+      );
+    const now = Date.now();
+    const testKey = "test:" + id;
+    const test = await db
+      .prepare(
+        "INSERT INTO reminder_receipts(id,created) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET created=excluded.created WHERE reminder_receipts.created<=?",
+      )
+      .bind(testKey, now, now - 30_000)
+      .run();
+    if (!test.meta.changes)
+      return reply(
+        { error: "Wait 30 seconds before sending another test." },
+        429,
+      );
+    try {
+      const push = await sendPush(device.endpoint);
+      if (push.status === 404 || push.status === 410)
+        return reply(
+          {
+            error:
+              "This phone subscription expired. Turn off alerts here, then enable phone notifications again.",
+          },
+          410,
+        );
+      if (!push.ok) {
+        console.warn("Reminder test rejected by push service", push.status);
+        return reply(
+          {
+            error: `The push service rejected this test (${push.status}). Turn off alerts, then enable phone notifications again.`,
+          },
+          502,
+        );
+      }
+      return reply({ ok: true });
+    } catch {
+      console.warn("Reminder test could not reach push service");
+      return reply(
+        {
+          error:
+            "Habit Grove could not reach the phone’s push service. Try again in a moment.",
+        },
+        502,
+      );
+    }
+  }
   if (body.action !== "enable")
     return reply({ error: "Unknown alert setting." }, 400);
   const result = await db

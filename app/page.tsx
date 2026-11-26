@@ -67,6 +67,7 @@ import { ProgressDashboard } from "@/components/daily-progress";
 import { classification, topics } from "@/lib/categories";
 import { slotTimes, messageTime } from "@/lib/interval";
 import {
+  audioReadyEvent,
   ring,
   soundEnabled,
   useAudioUnlock,
@@ -664,43 +665,72 @@ export default function App() {
   const monday = moveDay(day, -((dateObj(day).getUTCDay() + 6) % 7)),
     todayRows = journal.checkIns(today),
     due = todayRows.filter((r) => isOverdue(r, now));
-  const lastToast = useRef(new Set<string>());
+  const sounded = useRef(new Set<string>());
+  const notified = useRef(new Set<string>());
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const dueKey = (row: Row) => [row.id, row.day, row.slot, row.time].join("|");
+  const openAlerts = due.filter((row) => !dismissed.includes(dueKey(row)));
+  const alert = openAlerts[0];
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 15000);
-    return () => clearInterval(t);
+    const tick = () => setNow(new Date());
+    const timer = setInterval(tick, 15000);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("pageshow", tick);
+    window.addEventListener("focus", tick);
+    window.addEventListener(audioReadyEvent, tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("pageshow", tick);
+      window.removeEventListener("focus", tick);
+      window.removeEventListener(audioReadyEvent, tick);
+    };
   }, []);
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(""), 5500);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setToast(""), 5500);
+    return () => clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
-    for (const r of due) {
-      const key = [r.id, r.day, r.slot, r.time].join("|");
-      if (!lastToast.current.has(key)) {
-        lastToast.current.add(key);
-        if (soundEnabled() && document.visibilityState === "visible") ring();
-        setToast("Check-in due · " + r.title + " · " + displayTime(r.time));
-        if (
-          typeof Notification !== "undefined" &&
-          Notification.permission === "granted" &&
-          localStorage.getItem("grove.push") !== "on" &&
-          "serviceWorker" in navigator
-        )
-          navigator.serviceWorker.ready
-            .then((reg) =>
-              reg.showNotification("Habit Grove check-in", {
-                body: r.title + " · " + displayTime(r.time),
-                tag: key,
-                silent:
-                  !soundEnabled() || document.visibilityState === "visible",
-                icon: "/icon-192.png",
-              }),
-            )
-            .catch(() => {});
+    if (document.visibilityState === "visible") {
+      const unheard = openAlerts.filter(
+        (row) => !sounded.current.has(dueKey(row)),
+      );
+      if (unheard.length && soundEnabled() && ring()) {
+        for (const row of unheard) sounded.current.add(dueKey(row));
       }
+      return;
     }
-  }, [due, today]);
+    if (
+      !openAlerts.length ||
+      typeof Notification === "undefined" ||
+      Notification.permission !== "granted" ||
+      localStorage.getItem("grove.push") === "on" ||
+      !("serviceWorker" in navigator)
+    )
+      return;
+    const pending = openAlerts.filter(
+      (row) => !notified.current.has(dueKey(row)),
+    );
+    if (!pending.length) return;
+    for (const row of pending) notified.current.add(dueKey(row));
+    navigator.serviceWorker
+      .getRegistration()
+      .then(async (reg) => {
+        if (!reg?.active) throw Error("Notifications are not ready");
+        await reg.showNotification("Habit Grove reminder", {
+          body: "Open Habit Grove to view your check-ins.",
+          tag: "grove-due",
+          renotify: true,
+          silent: false,
+          icon: "/icon-192.png",
+          data: { view: "chat" },
+        } as NotificationOptions);
+      })
+      .catch(() => {
+        for (const row of pending) notified.current.delete(dueKey(row));
+      });
+  }, [openAlerts]);
   const bounds = periodBounds(dashboardPeriod, dashboardDay, today);
   const readRows = useCallback(
     (start: string, end: string) => {
@@ -1871,6 +1901,42 @@ export default function App() {
             </button>
           </form>
         </Modal>
+      )}
+      {alert && (
+        <aside className="reminder-popup" aria-label="Habit reminder">
+          <Bell size={19} aria-hidden="true" />
+          <div role="status">
+            <strong>
+              {openAlerts.length === 1
+                ? "Check-in due"
+                : `${openAlerts.length} check-ins due`}
+            </strong>
+            <span>
+              {alert.title} · {displayTime(alert.time)}
+            </span>
+          </div>
+          <button
+            className="secondary"
+            onClick={() => {
+              nav("Planner");
+              setDismissed((old) => [...old, ...openAlerts.map(dueKey)]);
+              requestAnimationFrame(() =>
+                document.getElementById("check-ins")?.scrollIntoView(),
+              );
+            }}
+          >
+            View
+          </button>
+          <button
+            className="iconbtn"
+            aria-label="Dismiss reminder"
+            onClick={() =>
+              setDismissed((old) => [...old, ...openAlerts.map(dueKey)])
+            }
+          >
+            <X size={18} />
+          </button>
+        </aside>
       )}
       {toast && (
         <div className="toast" role="status">

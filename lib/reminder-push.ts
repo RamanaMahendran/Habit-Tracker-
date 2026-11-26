@@ -2,7 +2,6 @@ import { env } from "cloudflare:workers";
 import { importJWK, SignJWT, base64url, type JWK } from "jose";
 import {
   indiaDay,
-  indiaTime,
   indexJournal,
   isOverdue,
   reminderAt,
@@ -10,7 +9,6 @@ import {
   type Entry,
   type Row,
 } from "./habits";
-import { minutes } from "./interval";
 export function publicKey() {
   const jwk = JSON.parse(env.REMINDER_VAPID_JWK || "null") as JWK | null;
   if (!jwk?.x || !jwk.y) throw Error("Push service is not configured.");
@@ -65,6 +63,7 @@ export async function sendPush(endpoint: string) {
     },
     body: new Uint8Array(0),
     redirect: "error",
+    signal: AbortSignal.timeout(8000),
   });
 }
 export async function dueRows(owner: string, now: Date) {
@@ -82,12 +81,9 @@ export async function dueRows(owner: string, now: Date) {
     ...e,
     payload: JSON.parse(String(e.payload)),
   })) as Entry[];
-  const m = minutes(indiaTime(now));
   return indexJournal(entries)
     .checkIns(day)
-    .filter(
-      (r) => isOverdue(r, now) && (r.rolling || m - minutes(r.time) < 30),
-    );
+    .filter((r) => isOverdue(r, now));
 }
 export async function deliverDevice(
   device: { id: string; endpoint: string; enabledAt: number },

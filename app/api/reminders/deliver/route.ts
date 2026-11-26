@@ -46,7 +46,15 @@ export async function POST(req: Request) {
     for (const d of page.results) {
       try {
         await deliverDevice(d, await dueRows(d.owner, now), now);
-      } catch {
+      } catch (error) {
+        const status =
+          error instanceof Error
+            ? /^Push service returned (\d{3})$/.exec(error.message)?.[1]
+            : undefined;
+        console.warn(
+          "Scheduled reminder delivery failed",
+          status ?? "request failed",
+        );
         failed = true;
       }
     }
