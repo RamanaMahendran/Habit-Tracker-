@@ -1,5 +1,5 @@
 import { checkInLabel } from "@/lib/check-in-labels";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   periods,
@@ -10,13 +10,99 @@ import {
 import {
   displayDay,
   displayTime,
+  dateObj,
   indiaDay,
   isOverdue,
+  moveDay,
   reminderDay,
   type Row,
 } from "@/lib/habits";
 import { minutes } from "@/lib/interval";
 import { timeBand } from "@/lib/categories";
+
+const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function CompletionCalendar({
+  start,
+  period,
+  today,
+  trend,
+  onSelect,
+}: {
+  start: string;
+  period: "1 week" | "1 month";
+  today: string;
+  trend: ReturnType<typeof trendBuckets>;
+  onSelect: (date: string) => void;
+}) {
+  const lastDay =
+    period === "1 week"
+      ? moveDay(start, 6)
+      : moveDay(shiftPeriod(period, start, 1), -1);
+  const firstColumn = ((dateObj(start).getUTCDay() + 6) % 7) + 1;
+  const byDate = new Map(trend.map((bucket) => [bucket.day, bucket]));
+  const dates = [];
+  for (let date = start; date <= lastDay; date = moveDay(date, 1)) {
+    dates.push(date);
+  }
+
+  return (
+    <section
+      className="completion-calendar"
+      aria-label="Daily completion calendar"
+    >
+      <div className="completion-heading">
+        <h3>Daily completion</h3>
+        <span>Done / scheduled</span>
+      </div>
+      <div className="completion-grid">
+        {weekdays.map((weekday) => (
+          <span className="completion-weekday" key={weekday}>
+            {weekday}
+          </span>
+        ))}
+        {dates.map((date, index) => {
+          const { done, total } = byDate.get(date) ?? { done: 0, total: 0 };
+          const future = date > today;
+          const status = !total
+            ? "empty"
+            : done === total
+              ? "complete"
+              : done
+                ? "partial"
+                : "pending";
+          const label = displayDay(date, {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          });
+          const detail = future
+            ? "Future date"
+            : total
+              ? `${done} of ${total} completed`
+              : "No check-ins scheduled";
+          return (
+            <button
+              type="button"
+              key={date}
+              className={`completion-day completion-${status}`}
+              style={index === 0 ? { gridColumnStart: firstColumn } : undefined}
+              aria-label={`${label}. ${detail}.`}
+              aria-current={date === today ? "date" : undefined}
+              disabled={future}
+              onClick={() => onSelect(date)}
+            >
+              <time dateTime={date}>{Number(date.slice(-2))}</time>
+              <span>{total ? `${done}/${total}` : "—"}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function progressStatus(row: Row, now: Date, today: string) {
   if (row.status !== "Pending") return row.status;
   if (reminderDay(row) < today) return "Unrecorded";
@@ -65,7 +151,9 @@ export function ProgressDashboard({
     [start, end, period, scheduled],
   );
   const done = scheduled.filter((r) => r.status === "Done").length;
+  const dayTab = useRef<HTMLButtonElement>(null);
   const monthPicker = period === "1 month" || period === "12 months";
+  const showCalendar = period === "1 week" || period === "1 month";
   const today = indiaDay(now);
   const dateLabel = (d: string) =>
     displayDay(d, { month: "short", day: "numeric", year: "numeric" });
@@ -112,6 +200,7 @@ export function ProgressDashboard({
       <div className="period-tabs" role="group" aria-label="Dashboard period">
         {periods.map((p) => (
           <button
+            ref={p === "Day" ? dayTab : undefined}
             aria-pressed={period === p}
             key={p}
             onClick={() => selectPeriod(p)}
@@ -181,15 +270,11 @@ export function ProgressDashboard({
               },
             )}
           </div>
-          {period !== "Day" ? (
+          {period === "12 months" && (
             <div className="period-trend">
-              <h3>
-                {period === "12 months"
-                  ? "Monthly completion"
-                  : "Daily completion"}
-              </h3>
+              <h3>Monthly completion</h3>
               <div className="trend-labels">
-                <span>{period === "12 months" ? "Month" : "Day"}</span>
+                <span>Month</span>
                 <span>Done / scheduled</span>
               </div>
               {trend.map((b) => (
@@ -202,12 +287,11 @@ export function ProgressDashboard({
                     b.done +
                     " of " +
                     b.total +
-                    " completed. View " +
-                    (period === "12 months" ? "month" : "day")
+                    " completed. View month"
                   }
                   onClick={() => {
                     onDay(b.day);
-                    onPeriod(period === "12 months" ? "1 month" : "Day");
+                    onPeriod("1 month");
                   }}
                 >
                   <span>{b.label}</span>
@@ -222,7 +306,8 @@ export function ProgressDashboard({
                 </button>
               ))}
             </div>
-          ) : (
+          )}
+          {period === "Day" && (
             <ol className="day-timeline">
               {scheduled.map((r) => {
                 const status = progressStatus(r, now, today);
@@ -253,10 +338,23 @@ export function ProgressDashboard({
             </ol>
           )}
         </>
-      ) : (
+      ) : !showCalendar ? (
         <p className="empty">
           No check-ins scheduled for this {period === "Day" ? "day" : "period"}.
         </p>
+      ) : null}
+      {showCalendar && (
+        <CompletionCalendar
+          start={start}
+          period={period}
+          today={today}
+          trend={trend}
+          onSelect={(date) => {
+            onDay(date);
+            onPeriod("Day");
+            requestAnimationFrame(() => dayTab.current?.focus());
+          }}
+        />
       )}
     </section>
   );
