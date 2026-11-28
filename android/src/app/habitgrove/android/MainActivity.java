@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.graphics.Insets;
 import android.health.connect.HealthConnectManager;
 import android.net.Uri;
@@ -13,12 +14,14 @@ import android.os.ext.SdkExtensions;
 import android.provider.Settings;
 import android.util.Base64;
 import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.webkit.WebMessage;
 import android.webkit.WebMessagePort;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -85,12 +88,6 @@ public final class MainActivity extends Activity {
         ReminderReceiver.createChannel(this);
         page = new WebView(this);
         page.setBackgroundColor(0xfff5f7f2);
-        page.setOnApplyWindowInsetsListener((view, insets) -> {
-            Insets safe = insets.getInsets(WindowInsets.Type.systemBars()
-                | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
-            view.setPadding(safe.left, safe.top, safe.right, safe.bottom);
-            return WindowInsets.CONSUMED;
-        });
         page.getSettings().setJavaScriptEnabled(true);
         page.getSettings().setDomStorageEnabled(true);
         page.getSettings().setAllowFileAccess(false);
@@ -118,8 +115,41 @@ public final class MainActivity extends Activity {
                 view.evaluateJavascript(BRIDGE, ignored -> installBridge(view));
             }
         });
-        setContentView(page);
+        FrameLayout container = createWebContainer();
+        setContentView(container);
+        container.post(() -> {
+            WindowInsetsController controller = container.getWindowInsetsController();
+            if (controller != null) {
+                controller.setSystemBarsAppearance(0,
+                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                        | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
+            }
+            container.requestApplyInsets();
+        });
         page.loadUrl(ORIGIN + (shouldOpenCheckIns(getIntent()) ? "/?view=chat" : "/"));
+    }
+
+    private FrameLayout createWebContainer() {
+        getWindow().setDecorFitsSystemWindows(false);
+        if (Build.VERSION.SDK_INT < 35) {
+            getWindow().setStatusBarColor(Color.TRANSPARENT);
+            getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        }
+        FrameLayout container = new FrameLayout(this);
+        container.setBackgroundColor(0xff234d3a);
+        container.addView(page, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        int handled = WindowInsets.Type.systemBars()
+            | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime();
+        container.setOnApplyWindowInsetsListener((view, insets) -> {
+            Insets safe = insets.getInsets(handled);
+            // Measure the WebView inside the safe rectangle, so CSS fixed elements
+            // use the same bounds as the visible page.
+            view.setPadding(safe.left, safe.top, safe.right, safe.bottom);
+            // Forward zero for handled insets so WebView can clear old values.
+            return new WindowInsets.Builder(insets).setInsets(handled, Insets.NONE).build();
+        });
+        return container;
     }
 
     private boolean isApp(Uri uri) {

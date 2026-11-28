@@ -1237,6 +1237,10 @@ footer {
 }
 
 @media (max-width: 700px) {
+  :root {
+    --mobile-nav-height: calc(58px + env(safe-area-inset-bottom));
+    scroll-padding-bottom: var(--mobile-nav-height);
+  }
   .phone-label {
     display: inline;
   }
@@ -1248,8 +1252,9 @@ footer {
     justify-content: space-between;
     gap: 8px;
     min-height: 52px;
-    padding: 4px 12px;
-    padding-top: max(4px, env(safe-area-inset-top));
+    padding: calc(4px + env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      4px max(12px, env(safe-area-inset-left));
   }
   .headwrap .brand {
     gap: 6px;
@@ -1293,7 +1298,8 @@ footer {
     line-height: 1.15;
   }
   main {
-    padding: 14px 12px calc(75px + env(safe-area-inset-bottom));
+    padding: 14px max(12px, env(safe-area-inset-right))
+      calc(17px + var(--mobile-nav-height)) max(12px, env(safe-area-inset-left));
   }
   .page-head {
     align-items: center;
@@ -1447,11 +1453,16 @@ footer {
     min-width: 44px;
   }
   .toast {
-    bottom: calc(64px + env(safe-area-inset-bottom));
+    bottom: calc(6px + var(--mobile-nav-height));
   }
   dialog {
-    width: min(490px, calc(100% - 20px));
-    max-height: min(88dvh, calc(100dvh - 24px));
+    --dialog-top: max(12px, env(safe-area-inset-top));
+    --dialog-right: max(10px, env(safe-area-inset-right));
+    --dialog-bottom: max(12px, env(safe-area-inset-bottom));
+    --dialog-left: max(10px, env(safe-area-inset-left));
+    inset: var(--dialog-top) var(--dialog-right) var(--dialog-bottom) var(--dialog-left);
+    width: min(490px, calc(100% - var(--dialog-left) - var(--dialog-right)));
+    max-height: min(88dvh, calc(100dvh - var(--dialog-top) - var(--dialog-bottom)));
     padding: 0 16px 16px;
   }
   dialog .dialog-heading {
