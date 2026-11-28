@@ -16,6 +16,14 @@ The Knowledge Book lists categories, subcategories, examples and active habits. 
 
 The journal records plan versions and check-ins without automatic expiry. Analytics can export all scheduled dates, habit definitions and changes in a three-sheet XLSX workbook. Archived habits retain earlier history.
 
+## Android and walking performance
+
+In **Analytics**, select a habit and select **Day**, **1 month**, or another period. The progress dashboard and matching activity log show check-ins for that habit.
+
+Download the Android app from **App updates** on Android 14 or newer. Use **Journal access** with the recovery code from your existing app to open the same journal. Select a walking habit in Analytics, then tap **Connect Health Connect**. Distance and active calories come from recorded walking workouts and their associated measurements. Your fitness app needs to sync those records to Health Connect. Activity measurements stay on the phone and are separate from the cloud journal.
+
+In **Check-ins → Reminder sound**, enable Android alerts and allow **Alarms & reminders** for on-time delivery. Android uses the last synced schedule, updates it after habit changes while the app is open, and plays the bundled retro tone with vibration. The app stores up to 30 days of upcoming times on the phone. Reopen the Android app to sync changes made on another device.
+
 ## Development and releases
 
 Install the dependencies with Node 22 and the checked-in lockfile. Use the scripts in package.json to generate migrations and build the app. Hosting configuration lives in .openai/hosting.json. Journal requests use a random 256-bit device-held key. Only its digest identifies records in the database. Legacy import also requires the original platform identity. Apply the committed migrations to the local D1 binding for development.
@@ -23,3 +31,5 @@ Install the dependencies with Node 22 and the checked-in lockfile. Use the scrip
 Keep future changes in this repository. Update public/version.json for releases, verify the app, and publish the corresponding source to the existing Habit Grove site. The hosting deployment is a separate step. Never commit database exports or credentials.
 
 The reminder worker uses a secret P-256 private JWK in REMINDER_VAPID_JWK. The notification endpoint validates a short-lived GitHub OIDC token for the dedicated reminder workflow on main. The scheduler receives no journal contents. Keep the application-server key stable for existing subscriptions.
+
+Rebuild the Android APK only when native code changes. With JDK 17 or newer, Node.js, Android SDK Platform 35, and Build Tools 35.0.0, set `ANDROID_HOME`, `GROVE_ANDROID_KEYSTORE` and `GROVE_ANDROID_KEY_PASSWORD` locally. Run `bash android/build-apk.sh public/android/habit-grove.apk` using the existing release signing key. Increment the Android manifest version code for native updates and keep the signing key outside Git. The Android app loads the live website and receives web updates when it opens.

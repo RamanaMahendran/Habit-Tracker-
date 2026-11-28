@@ -65,6 +65,7 @@ export function ProgressDashboard({
     [start, end, period, scheduled],
   );
   const done = scheduled.filter((r) => r.status === "Done").length;
+  const monthPicker = period === "1 month" || period === "12 months";
   const today = indiaDay(now);
   const dateLabel = (d: string) =>
     displayDay(d, { month: "short", day: "numeric", year: "numeric" });
@@ -87,21 +88,23 @@ export function ProgressDashboard({
             ? "Day · IST"
             : period === "12 months"
               ? "Ending month · IST"
-              : "Choose a date · IST"}
+              : monthPicker
+                ? "Choose a month · IST"
+                : "Choose a date · IST"}
           <input
-            type={period === "12 months" ? "month" : "date"}
+            type={monthPicker ? "month" : "date"}
             max={
               period === "Day"
                 ? undefined
-                : period === "12 months"
+                : monthPicker
                   ? today.slice(0, 7)
                   : today
             }
-            value={period === "12 months" ? day.slice(0, 7) : day}
+            value={monthPicker ? day.slice(0, 7) : day}
             onChange={(e) => {
               const value = e.target.value;
               if (value && e.target.validity.valid)
-                onDay(period === "12 months" ? value + "-01" : value);
+                onDay(monthPicker ? value + "-01" : value);
             }}
           />
         </label>

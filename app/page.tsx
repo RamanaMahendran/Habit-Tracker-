@@ -50,6 +50,7 @@ import {
   blank,
   indexJournal,
   isOverdue,
+  reminderAt,
   reminderDay,
   type Row,
   type Habit,
@@ -80,6 +81,8 @@ import { checkInLabel, customCheckInStatus } from "@/lib/check-in-labels";
 import { CheckInFeed } from "@/components/check-in-feed";
 import { JournalAccess } from "@/components/journal-access";
 import { journalFetch, onJournalSwitch } from "@/lib/journal-key";
+import { useAndroidBridge, useAndroidReminderSync } from "@/lib/android-bridge";
+import { WalkingPerformance, isWalkingHabit } from "@/components/walking-performance";
 
 const tabs: { name: string; shortName?: string; icon: LucideIcon }[] = [
   { name: "Planner", icon: CalendarDays },
@@ -161,9 +164,11 @@ function useJournal() {
     go();
     const id = setInterval(go, 20000);
     window.addEventListener("focus", go);
+    window.addEventListener("habit-grove-android-resumed", go);
     return () => {
       clearInterval(id);
       window.removeEventListener("focus", go);
+      window.removeEventListener("habit-grove-android-resumed", go);
     };
   }, [refresh]);
   async function save(changes: Change[]) {
@@ -601,6 +606,7 @@ function Fields({
 }
 export default function App() {
   useAudioUnlock();
+  const android = useAndroidBridge();
   const {
     events,
     refresh,
@@ -634,6 +640,7 @@ export default function App() {
     [dashboardDay, setDashboardDay] = useState(indiaDay),
     [dashboardPeriod, setDashboardPeriod] = useState<ProgressPeriod>("Day"),
     [area, setArea] = useState<ProductivityArea | "All">("All"),
+    [activityHabit, setActivityHabit] = useState(""),
     [period, setPeriod] = useState("dashboard"),
     [limit, setLimit] = useState(50),
     [exporting, setExporting] = useState(false);
@@ -650,6 +657,17 @@ export default function App() {
     scheduled = rows.filter((r) => !r.outsideDay),
     done = scheduled.filter((r) => r.status === "Done").length,
     overdue = pendingCheckIns.length;
+  const deviceReminders = useMemo(() => {
+    if (!android || state !== "Cloud synced") return null;
+    const times = new Set<number>();
+    for (let offset = 0; offset < 30; offset++) {
+      for (const row of journal.checkIns(moveDay(today, offset))) {
+        if (row.next && row.time && !row.outsideDay) times.add(reminderAt(row));
+      }
+    }
+    return [...times].sort((a, b) => a - b);
+  }, [android, journal, state, today]);
+  useAndroidReminderSync(android, deviceReminders);
   const lastToday = useRef(today);
   useEffect(() => {
     const previous = lastToday.current;
@@ -692,6 +710,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
+    if (android) return;
     if (document.visibilityState === "visible") {
       const unheard = openAlerts.filter(
         (row) => !sounded.current.has(dueKey(row)),
@@ -723,6 +742,7 @@ export default function App() {
           tag: "grove-due",
           renotify: true,
           silent: false,
+          vibrate: [120, 95, 120, 160, 250],
           icon: "/icon-192.png",
           data: { view: "chat" },
         } as NotificationOptions);
@@ -730,7 +750,7 @@ export default function App() {
       .catch(() => {
         for (const row of pending) notified.current.delete(dueKey(row));
       });
-  }, [openAlerts]);
+  }, [android, openAlerts]);
   const bounds = periodBounds(dashboardPeriod, dashboardDay, today);
   const readRows = useCallback(
     (start: string, end: string) => {
@@ -754,10 +774,12 @@ export default function App() {
   );
   const dashboardRows = useMemo(
     () =>
-      area === "All"
-        ? periodRows
-        : periodRows.filter((row) => productivityArea(row.category) === area),
-    [area, periodRows],
+      periodRows.filter(
+        (row) =>
+          (!activityHabit || row.id === activityHabit) &&
+          (area === "All" || productivityArea(row.category) === area),
+      ),
+    [activityHabit, area, periodRows],
   );
   const history = useMemo(() => {
     if (period === "dashboard") return dashboardRows;
@@ -767,9 +789,11 @@ export default function App() {
     return readRows(start, today).filter(
       (row) =>
         !row.outsideDay &&
+        (!activityHabit || row.id === activityHabit) &&
         (area === "All" || productivityArea(row.category) === area),
     );
-  }, [dashboardRows, tab, period, readRows, journal.first, today, area]);
+  }, [activityHabit, dashboardRows, tab, period, readRows, journal.first, today, area]);
+  const selectedActivity = journal.current.find((habit) => habit.id === activityHabit);
   const changeDashboardDay = (d: string) => {
     setDashboardDay(d);
     setLimit(50);
@@ -1601,6 +1625,7 @@ export default function App() {
                     aria-pressed={area === name}
                     onClick={() => {
                       setArea(name);
+                      setActivityHabit("");
                       setLimit(50);
                     }}
                   >
@@ -1613,6 +1638,28 @@ export default function App() {
                 );
               })}
             </div>
+            <div className="analyticshead activity-filter">
+              <label>
+                Habit
+                <select
+                  value={activityHabit}
+                  onChange={(event) => {
+                    setActivityHabit(event.target.value);
+                    setArea("All");
+                    setLimit(50);
+                  }}
+                >
+                  <option value="">All habits</option>
+                  {[...journal.current]
+                    .sort((a, b) => a.title.localeCompare(b.title))
+                    .map((habit) => (
+                      <option key={habit.id} value={habit.id}>
+                        {habit.title}{habit.archived ? " (archived)" : ""}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </div>
             <ProgressDashboard
               period={dashboardPeriod}
               onPeriod={changeDashboardPeriod}
@@ -1623,6 +1670,14 @@ export default function App() {
               rows={dashboardRows}
               now={now}
             />
+            {selectedActivity && isWalkingHabit(selectedActivity.title) && (
+              <WalkingPerformance
+                android={android}
+                start={bounds.start}
+                end={bounds.end}
+                period={dashboardPeriod}
+              />
+            )}
             <div className="analyticshead">
               <label>
                 Activity log period{" "}
@@ -1699,7 +1754,9 @@ export default function App() {
               </div>
               {!history.length && (
                 <div className="empty">
-                  Activity will appear here once you schedule a habit.
+                  {activityHabit
+                    ? "No check-ins for this habit in the selected period."
+                    : "No habit activity in the selected period."}
                 </div>
               )}
               {limit < history.length && (
@@ -1747,7 +1804,13 @@ export default function App() {
               Update now
             </button>
           )}
-          {!installed && (
+          {!android && (
+            <div className="installinfo">
+              <a href="/android/habit-grove.apk" download>Download Habit Grove for Android 14+</a>
+              <p>Open your existing journal with its recovery code to keep your habits.</p>
+            </div>
+          )}
+          {!installed && !android && (
             <div className="installinfo">
               <h3>Install on your phone</h3>
               {installEvent ? (

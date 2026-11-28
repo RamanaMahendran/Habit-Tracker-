@@ -15,6 +15,7 @@ self.addEventListener("push", (event) => {
       tag: "grove-due",
       renotify: true,
       silent: false,
+      vibrate: [120, 95, 120, 160, 250],
     }),
   );
 });

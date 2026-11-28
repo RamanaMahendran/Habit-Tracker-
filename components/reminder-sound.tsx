@@ -1,23 +1,28 @@
 "use client";
 import { useEffect, useState } from "react";
 import { journalFetch } from "@/lib/journal-key";
+import { useAndroidBridge, type AndroidBridge } from "@/lib/android-bridge";
 
 let audio: AudioContext | undefined;
 export const audioReadyEvent = "grove-audio-ready";
 
 export function ring() {
   if (!audio || audio.state !== "running") return false;
-  for (const [offset, hz] of [
-    [0, 660],
-    [0.24, 880],
+  for (const [offset, hz, duration] of [
+    [0, 784, 0.13],
+    [0.19, 1047, 0.13],
+    [0.47, 784, 0.13],
+    [0.66, 1175, 0.24],
   ]) {
     const osc = audio.createOscillator();
     const gain = audio.createGain();
     const t = audio.currentTime + offset;
+    osc.type = "square";
     osc.frequency.value = hz;
     gain.gain.setValueAtTime(0.001, t);
-    gain.gain.exponentialRampToValueAtTime(0.32, t + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    gain.gain.exponentialRampToValueAtTime(0.1, t + 0.015);
+    gain.gain.setValueAtTime(0.1, t + duration - 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
     osc.connect(gain);
     gain.connect(audio.destination);
     osc.onended = () => {
@@ -25,8 +30,9 @@ export function ring() {
       gain.disconnect();
     };
     osc.start(t);
-    osc.stop(t + 0.41);
+    osc.stop(t + duration);
   }
+  navigator.vibrate?.([120, 95, 120, 160, 250]);
   return true;
 }
 
@@ -103,6 +109,70 @@ type TestResult = {
 };
 
 export function SoundSettings() {
+  const android = useAndroidBridge();
+  return android ? <AndroidAlertSettings android={android} /> : <BrowserSoundSettings />;
+}
+
+type AndroidAlertStatus = { enabled: boolean; exact: boolean };
+function AndroidAlertSettings({ android }: { android: AndroidBridge }) {
+  const [status, setStatus] = useState<AndroidAlertStatus>();
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const update = () => {
+      if (document.visibilityState === "visible")
+        android.request<AndroidAlertStatus>("alertStatus").then(setStatus).catch(() => {});
+    };
+    update();
+    document.addEventListener("visibilitychange", update);
+    window.addEventListener("habit-grove-android-resumed", update);
+    return () => {
+      document.removeEventListener("visibilitychange", update);
+      window.removeEventListener("habit-grove-android-resumed", update);
+    };
+  }, [android]);
+
+  async function change(action: string) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await android.request<AndroidAlertStatus>(action);
+      setStatus(result);
+      if (action === "testAlert")
+        setMessage(result.exact
+          ? "Test in 10 seconds. Press Home and lock your phone."
+          : "Test queued. Android may delay it until Alarms & reminders is allowed.");
+      if (action === "enableAlerts" && !result.enabled)
+        setMessage("Allow notifications in Android settings to enable reminders.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not change reminders.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="sound-settings">
+      <strong>Android reminder alerts</strong>
+      <div className="choices">
+        {!status?.enabled ? (
+          <button disabled={busy} onClick={() => void change("enableAlerts")}>Enable Android alerts</button>
+        ) : (
+          <>
+            <button disabled={busy} onClick={() => void change("testAlert")}>Test with app closed</button>
+            {!status.exact && <button disabled={busy} onClick={() => void change("exactAlarms")}>Allow on-time alerts</button>}
+            <button disabled={busy} onClick={() => void change("alertSettings")}>Android sound settings</button>
+            <button disabled={busy} onClick={() => void change("disableAlerts")}>Turn off alerts</button>
+          </>
+        )}
+      </div>
+      <small role="status">{message || (status?.enabled && !status.exact
+        ? "Allow Alarms & reminders in Android settings for alerts at the scheduled time."
+        : "Scheduled alerts use a classic electronic tone with vibration.")}</small>
+    </section>
+  );
+}
+
+function BrowserSoundSettings() {
   const [state, setState] = useState("");
   const [busy, setBusy] = useState(false);
   const [enabled, setEnabled] = useState(false);

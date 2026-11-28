@@ -478,6 +478,31 @@ h3 {
 .analyticshead {
   justify-content: flex-end;
 }
+.activity-filter {
+  justify-content: flex-start;
+}
+.activity-filter label,
+.walking-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.activity-filter select {
+  max-width: min(75vw, 28rem);
+}
+.walking-performance {
+  margin: 16px 0;
+}
+.walking-heading h2 {
+  margin: 0;
+}
+.walking-performance table {
+  min-width: 0;
+}
+.walking-totals {
+  margin: 12px 0;
+}
 .scrolltable {
   overflow: auto;
 }

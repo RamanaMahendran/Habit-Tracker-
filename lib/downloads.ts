@@ -19,8 +19,22 @@ const xml = (x: unknown) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 export function saveFile(data: BlobPart, type: string, name: string) {
+  const blob = new Blob([data], { type });
+  const android = window.habitGroveAndroid;
+  if (android) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = String(reader.result).split(",", 2)[1];
+      android.request("saveFile", { base64, type, name }).catch((error: Error) => {
+        window.alert(error.message);
+      });
+    };
+    reader.onerror = () => window.alert("Could not read the export.");
+    reader.readAsDataURL(blob);
+    return;
+  }
   const a = document.createElement("a");
-  const url = URL.createObjectURL(new Blob([data], { type }));
+  const url = URL.createObjectURL(blob);
   a.href = url;
   a.download = name;
   a.click();
