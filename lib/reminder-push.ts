@@ -114,7 +114,7 @@ export async function deliverDevice(
         .prepare("DELETE FROM reminder_devices WHERE id=?")
         .bind(device.id)
         .run();
-      return;
+      return "expired";
     }
     if (!result.ok) throw Error("Push service returned " + result.status);
   } catch (err) {
@@ -125,4 +125,5 @@ export async function deliverDevice(
     );
     throw err;
   }
+  return "accepted";
 }

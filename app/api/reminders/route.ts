@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { env, waitUntil } from "cloudflare:workers";
 import { owner } from "@/lib/journal-owner";
 import {
   digest,
@@ -7,6 +7,8 @@ import {
   sendPush,
 } from "@/lib/reminder-push";
 export const dynamic = "force-dynamic";
+const testDelay = 15_000;
+const testCooldown = 30_000;
 const reply = (body: unknown, status = 200) =>
   Response.json(body, {
     status,
@@ -36,7 +38,7 @@ export async function POST(req: Request) {
       .run();
     return reply({ ok: true });
   }
-  if (body.action === "test") {
+  if (body.action === "test" || body.action === "test-status") {
     const device = await db
       .prepare("SELECT endpoint FROM reminder_devices WHERE id=? AND owner=?")
       .bind(id, user)
@@ -46,49 +48,43 @@ export async function POST(req: Request) {
         { error: "Enable phone notifications for this journal first." },
         409,
       );
+    const testKey = "test:" + (await digest(user + "|" + id));
+    if (body.action === "test-status") {
+      const receipt = await db
+        .prepare("SELECT created FROM reminder_receipts WHERE id=?")
+        .bind(testKey)
+        .first<{ created: number }>();
+      if (!receipt) return reply({ state: "none" });
+      const runKey = `${testKey}:${receipt.created}`;
+      const result = await db
+        .prepare("SELECT id,created FROM reminder_receipts WHERE id IN (?,?)")
+        .bind("accepted:" + runKey, "failed:" + runKey)
+        .first<{ id: string; created: number }>();
+      return reply({
+        state: result
+          ? result.id.startsWith("accepted:")
+            ? "accepted"
+            : "failed"
+          : Date.now() - receipt.created < testCooldown
+            ? "queued"
+            : "unconfirmed",
+        sentAt: result?.created,
+      });
+    }
     const now = Date.now();
-    const testKey = "test:" + id;
     const test = await db
       .prepare(
         "INSERT INTO reminder_receipts(id,created) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET created=excluded.created WHERE reminder_receipts.created<=?",
       )
-      .bind(testKey, now, now - 30_000)
+      .bind(testKey, now, now - testCooldown)
       .run();
     if (!test.meta.changes)
       return reply(
         { error: "Wait 30 seconds before sending another test." },
         429,
       );
-    try {
-      const push = await sendPush(device.endpoint);
-      if (push.status === 404 || push.status === 410)
-        return reply(
-          {
-            error:
-              "This phone subscription expired. Turn off alerts here, then enable phone notifications again.",
-          },
-          410,
-        );
-      if (!push.ok) {
-        console.warn("Reminder test rejected by push service", push.status);
-        return reply(
-          {
-            error: `The push service rejected this test (${push.status}). Turn off alerts, then enable phone notifications again.`,
-          },
-          502,
-        );
-      }
-      return reply({ ok: true });
-    } catch {
-      console.warn("Reminder test could not reach push service");
-      return reply(
-        {
-          error:
-            "Habit Grove could not reach the phone’s push service. Try again in a moment.",
-        },
-        502,
-      );
-    }
+    waitUntil(runPushTest(id, user, testKey, now));
+    return reply({ delaySeconds: testDelay / 1000 }, 202);
   }
   if (body.action !== "enable")
     return reply({ error: "Unknown alert setting." }, 400);
@@ -106,4 +102,34 @@ export async function POST(req: Request) {
       409,
     );
   return reply({ ok: true });
+}
+
+async function runPushTest(
+  id: string,
+  user: string,
+  testKey: string,
+  startedAt: number,
+) {
+  await new Promise((resolve) => setTimeout(resolve, testDelay));
+  const db = env.DB!;
+  const device = await db
+    .prepare("SELECT endpoint FROM reminder_devices WHERE id=? AND owner=?")
+    .bind(id, user)
+    .first<{ endpoint: string }>();
+  if (!device) return;
+
+  let accepted = false;
+  try {
+    const push = await sendPush(device.endpoint);
+    accepted = push.ok;
+    if (!accepted)
+      console.warn("Reminder test rejected by push service", push.status);
+  } catch {
+    console.warn("Reminder test could not reach push service");
+  }
+  const result = accepted ? "accepted" : "failed";
+  await db
+    .prepare("INSERT INTO reminder_receipts(id,created) VALUES(?,?)")
+    .bind(`${result}:${testKey}:${startedAt}`, Date.now())
+    .run();
 }

@@ -94,7 +94,13 @@ async function deviceRequest(action: string, endpoint: string) {
       body?.error || "Could not reach the reminder service. Try again.",
     );
   }
+  return response;
 }
+
+type TestResult = {
+  state: "accepted" | "failed" | "none" | "queued" | "unconfirmed";
+  sentAt?: number;
+};
 
 export function SoundSettings() {
   const [state, setState] = useState("");
@@ -186,15 +192,42 @@ export function SoundSettings() {
       }
       localStorage.setItem("grove.push", "on");
       setBackground(true);
-      await deviceRequest("test", sub.endpoint);
+      const test = await deviceRequest("test", sub.endpoint);
+      const { delaySeconds } = (await test.json()) as { delaySeconds: number };
       setState(
-        "Test sent to this device. Check your notification shade. If it’s quiet, check that Chrome or Habit Grove notifications are set to Alerting.",
+        `Test scheduled in ${delaySeconds} seconds. Press Home and lock your phone. When you return, tap Check test result.`,
       );
     } catch (error) {
       setState(
         error instanceof Error
           ? error.message
           : "Could not send the test notification.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function checkTest() {
+    setBusy(true);
+    try {
+      const reg = await workerReady();
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) throw Error("Enable phone notifications for this device again.");
+      const response = await deviceRequest("test-status", sub.endpoint);
+      const { state: result, sentAt } = (await response.json()) as TestResult;
+      const time = sentAt
+        ? new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(sentAt)
+        : "";
+      setState({
+        accepted: `The push service accepted the test at ${time}. If it appeared silently, set Chrome or Habit Grove notifications to Alerting in Android settings.`,
+        failed: "The push service failed the test. Turn off alerts, then enable phone notifications again.",
+        none: "Send a phone notification test first.",
+        queued: "The test is still pending. Check again in a few seconds.",
+        unconfirmed: "The server could not confirm the test. Try sending it again.",
+      }[result]);
+    } catch (error) {
+      setState(
+        error instanceof Error ? error.message : "Could not check the test result.",
       );
     } finally {
       setBusy(false);
@@ -229,9 +262,14 @@ export function SoundSettings() {
         </button>
         <button disabled={busy} onClick={enableAndTest}>
           {background
-            ? "Test phone notification"
+            ? "Test with app closed"
             : "Enable phone notifications"}
         </button>
+        {background && (
+          <button disabled={busy} onClick={checkTest}>
+            Check test result
+          </button>
+        )}
         {(enabled || background) && (
           <button disabled={busy} onClick={disable}>
             Turn off alerts
